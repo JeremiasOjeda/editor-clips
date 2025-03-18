@@ -2,9 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { 
   Container, Typography, Box, Button, Grid, Paper, 
-  CircularProgress, Alert, FormControlLabel, Switch, Snackbar
+  CircularProgress, Alert, FormControlLabel, Switch, Snackbar,
+  Menu, MenuItem, ListItemIcon, ListItemText
 } from '@mui/material';
-import { Download, ArrowBack, Warning } from '@mui/icons-material';
+import { 
+  Download, ArrowBack, Warning, VideoLibrary, 
+  FileCopy, Settings, Info
+} from '@mui/icons-material';
 import { Link } from 'react-router-dom';
 import VideoPlayer from '../components/VideoPlayer';
 import SimpleVideoPlayer from '../components/SimpleVideoPlayer';
@@ -12,6 +16,20 @@ import ClipSelector from '../components/ClipSelector';
 import ProcessingProgress from '../components/ProcessingProgress';
 import { getVideoByCode } from '../services/videoService';
 import { clipVideo, isFFmpegSupported } from '../services/ffmpegService';
+// Importar servicios alternativos si existen
+let alternativeClipService;
+let basicClipService;
+
+try {
+  alternativeClipService = require('../services/alternativeClipService');
+  basicClipService = require('../services/basicClipService');
+  
+  // Hacer que los servicios alternativos estén disponibles globalmente
+  window.alternativeClipService = alternativeClipService;
+  window.basicClipService = basicClipService;
+} catch (err) {
+  console.log('Servicios alternativos no disponibles:', err);
+}
 
 function VideoPage() {
   const { code } = useParams();
@@ -32,11 +50,32 @@ function VideoPage() {
   // Estado para notificaciones
   const [notification, setNotification] = useState({ open: false, message: '' });
   
-  // Verificar si FFmpeg es compatible con este navegador
+  // Estado para el menú de opciones de descarga
+  const [anchorEl, setAnchorEl] = useState(null);
+  const openMenu = Boolean(anchorEl);
+  
+  // Verificar compatibilidad de métodos de procesamiento
   const [ffmpegSupported, setFfmpegSupported] = useState(true);
-
+  const [alternativeSupported, setAlternativeSupported] = useState(false);
+  const [methodToUse, setMethodToUse] = useState('ffmpeg'); // ffmpeg, alternative, basic
+  
   useEffect(() => {
-    setFfmpegSupported(isFFmpegSupported());
+    // Verificar soporte de FFmpeg
+    const ffmpegSupport = isFFmpegSupported();
+    setFfmpegSupported(ffmpegSupport);
+    
+    // Verificar soporte de método alternativo
+    const alternativeSupport = alternativeClipService && alternativeClipService.isAlternativeMethodSupported();
+    setAlternativeSupported(alternativeSupport);
+    
+    // Establecer método por defecto basado en compatibilidad
+    if (ffmpegSupport) {
+      setMethodToUse('ffmpeg');
+    } else if (alternativeSupport) {
+      setMethodToUse('alternative');
+    } else {
+      setMethodToUse('basic');
+    }
   }, []);
   
   // Función para manejar cambios en la selección de clip
@@ -54,16 +93,28 @@ function VideoPage() {
     }
   };
   
+  // Función para abrir el menú de opciones de descarga
+  const handleOpenMenu = (event) => {
+    setAnchorEl(event.currentTarget);
+  };
+  
+  // Función para cerrar el menú de opciones de descarga
+  const handleCloseMenu = () => {
+    setAnchorEl(null);
+  };
+  
+  // Función para seleccionar el método de procesamiento
+  const handleSelectMethod = (method) => {
+    setMethodToUse(method);
+    handleCloseMenu();
+    setNotification({
+      open: true,
+      message: `Método de procesamiento cambiado a ${method}`
+    });
+  };
+  
   // Función para procesar y descargar el clip
   const handleProcessClip = async () => {
-    if (!ffmpegSupported) {
-      setNotification({
-        open: true,
-        message: 'Tu navegador no es compatible con FFmpeg. Intenta con Chrome o Firefox reciente.'
-      });
-      return;
-    }
-    
     try {
       // Limpiar URL anterior si existe
       if (clipUrl) {
@@ -79,36 +130,80 @@ function VideoPage() {
         videoTitle: video.title,
         clipStart,
         clipEnd,
+        methodUsed: methodToUse,
         device: navigator.userAgent,
         timestamp: new Date().toISOString()
       };
       console.log('Datos de auditoría:', auditData);
       
-      // Procesar el video
-      const result = await clipVideo(
-        video.url,
-        clipStart,
-        clipEnd,
-        (progress) => {
-          if (progress.type === 'download') {
-            setProcessStatus('downloading');
-            setProcessProgress(progress.progress);
-          } else if (progress.type === 'processing') {
-            setProcessStatus('processing');
-            setProcessProgress(progress.progress);
+      let result;
+      
+      // Procesar el video según el método seleccionado
+      switch (methodToUse) {
+        case 'ffmpeg':
+          result = await clipVideo(
+            video.url,
+            clipStart,
+            clipEnd,
+            (progress) => {
+              setProcessStatus(progress.type);
+              setProcessProgress(progress.progress);
+            }
+          );
+          break;
+          
+        case 'alternative':
+          if (alternativeClipService) {
+            result = await alternativeClipService.clipVideoAlternative(
+              video.url,
+              clipStart,
+              clipEnd,
+              (progress) => {
+                setProcessStatus(progress.type);
+                setProcessProgress(progress.progress);
+              }
+            );
+          } else {
+            throw new Error('El método alternativo no está disponible');
           }
-        }
-      );
+          break;
+          
+        case 'basic':
+          if (basicClipService) {
+            result = await basicClipService.clipVideoBasic(
+              video.url,
+              clipStart,
+              clipEnd,
+              (progress) => {
+                setProcessStatus(progress.type);
+                setProcessProgress(progress.progress);
+              }
+            );
+          } else {
+            throw new Error('El método básico no está disponible');
+          }
+          break;
+          
+        default:
+          throw new Error('Método de procesamiento no válido');
+      }
       
       // Actualizar estado con la URL del clip
       setClipUrl(result.url);
       setProcessStatus('complete');
       
-      // Mostrar notificación de éxito
-      setNotification({
-        open: true,
-        message: 'Clip procesado correctamente. Haz clic en Descargar para guardar.'
-      });
+      // Si el resultado es una URL directa, informar al usuario
+      if (result.isDirectURL) {
+        setNotification({
+          open: true,
+          message: 'Se generó un enlace directo al fragmento. La descarga puede contener el video completo.'
+        });
+      } else {
+        setNotification({
+          open: true,
+          message: 'Clip procesado correctamente. Haz clic en Descargar para guardar.'
+        });
+      }
       
     } catch (err) {
       console.error('Error al procesar el clip:', err);
@@ -237,15 +332,14 @@ function VideoPage() {
           Código del video: {code}
         </Typography>
         
-        {!ffmpegSupported && (
+        {!ffmpegSupported && !alternativeSupported && (
           <Alert 
             severity="warning" 
             icon={<Warning />}
             sx={{ mb: 3 }}
           >
-            Tu navegador no es compatible con el procesamiento de video mediante FFmpeg. 
-            La funcionalidad de recorte y descarga puede no estar disponible. 
-            Intenta con Chrome o Firefox actualizados.
+            Tu navegador tiene limitaciones de compatibilidad para el procesamiento avanzado de video.
+            Se utilizará un método simplificado que podría descargar el video completo con marcadores de tiempo.
           </Alert>
         )}
 
@@ -279,9 +373,63 @@ function VideoPage() {
           <Grid item xs={12} md={4}>
             <Paper elevation={2}>
               <Box p={3}>
-                <Typography variant="h6" gutterBottom>
-                  Descargar Clip
-                </Typography>
+                <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                  <Typography variant="h6">
+                    Descargar Clip
+                  </Typography>
+                  <Button
+                    size="small"
+                    startIcon={<Settings />}
+                    onClick={handleOpenMenu}
+                    variant="outlined"
+                  >
+                    Opciones
+                  </Button>
+                  <Menu
+                    anchorEl={anchorEl}
+                    open={openMenu}
+                    onClose={handleCloseMenu}
+                  >
+                    <MenuItem
+                      selected={methodToUse === 'ffmpeg'}
+                      onClick={() => handleSelectMethod('ffmpeg')}
+                      disabled={!ffmpegSupported}
+                    >
+                      <ListItemIcon>
+                        <VideoLibrary fontSize="small" />
+                      </ListItemIcon>
+                      <ListItemText 
+                        primary="FFmpeg (Mejor calidad)" 
+                        secondary={!ffmpegSupported ? "No compatible con tu navegador" : ""}
+                      />
+                    </MenuItem>
+                    <MenuItem
+                      selected={methodToUse === 'alternative'}
+                      onClick={() => handleSelectMethod('alternative')}
+                      disabled={!alternativeSupported}
+                    >
+                      <ListItemIcon>
+                        <FileCopy fontSize="small" />
+                      </ListItemIcon>
+                      <ListItemText 
+                        primary="Alternativo (Experimental)" 
+                        secondary={!alternativeSupported ? "No compatible con tu navegador" : ""}
+                      />
+                    </MenuItem>
+                    <MenuItem
+                      selected={methodToUse === 'basic'}
+                      onClick={() => handleSelectMethod('basic')}
+                    >
+                      <ListItemIcon>
+                        <Info fontSize="small" />
+                      </ListItemIcon>
+                      <ListItemText 
+                        primary="Básico (Compatible con todos)" 
+                        secondary="Descarga con referencia de tiempo"
+                      />
+                    </MenuItem>
+                  </Menu>
+                </Box>
                 
                 <Box my={2}>
                   <ProcessingProgress 
@@ -300,8 +448,7 @@ function VideoPage() {
                       onClick={handleProcessClip}
                       disabled={processStatus === 'initializing' || 
                                processStatus === 'downloading' || 
-                               processStatus === 'processing' ||
-                               !ffmpegSupported}
+                               processStatus === 'processing'}
                     >
                       Procesar Clip
                     </Button>
@@ -321,6 +468,24 @@ function VideoPage() {
                 <Typography variant="caption" color="textSecondary" display="block" mt={2}>
                   *El procesamiento puede tardar unos momentos dependiendo del tamaño del clip
                 </Typography>
+                
+                {methodToUse === 'ffmpeg' && (
+                  <Typography variant="caption" color="primary" display="block" mt={1}>
+                    Usando FFmpeg para procesamiento de alta calidad
+                  </Typography>
+                )}
+                
+                {methodToUse === 'alternative' && (
+                  <Typography variant="caption" color="secondary" display="block" mt={1}>
+                    Usando método alternativo (experimental)
+                  </Typography>
+                )}
+                
+                {methodToUse === 'basic' && (
+                  <Typography variant="caption" color="info.main" display="block" mt={1}>
+                    Usando método básico (compatible con todos los navegadores)
+                  </Typography>
+                )}
               </Box>
             </Paper>
           </Grid>

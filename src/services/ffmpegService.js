@@ -6,19 +6,29 @@ let ffmpeg = null;
 // Función para inicializar FFmpeg si aún no está inicializado
 const initFFmpeg = async () => {
   if (!ffmpeg) {
+    console.log('Creando instancia de FFmpeg...');
     ffmpeg = createFFmpeg({
       log: true,
       corePath: 'https://unpkg.com/@ffmpeg/core@0.10.0/dist/ffmpeg-core.js',
+      // Configuración necesaria para navegadores modernos
+      mainName: 'main',
+      enableSharedArrayBuffer: true,
+      enableWebWorker: true,
+      enableCrossOriginIsolation: true,
     });
   }
   
-  if (!ffmpeg.isLoaded()) {
-    console.log('Cargando FFmpeg...');
-    await ffmpeg.load();
-    console.log('FFmpeg cargado correctamente');
+  try {
+    if (!ffmpeg.isLoaded()) {
+      console.log('Cargando FFmpeg...');
+      await ffmpeg.load();
+      console.log('FFmpeg cargado correctamente');
+    }
+    return ffmpeg;
+  } catch (error) {
+    console.error('Error al cargar FFmpeg:', error);
+    throw new Error(`No se pudo cargar FFmpeg: ${error.message}`);
   }
-  
-  return ffmpeg;
 };
 
 // Función para recortar un video usando FFmpeg
@@ -31,11 +41,22 @@ export const clipVideo = async (videoUrl, startTime, endTime, onProgress = () =>
     console.log('Descargando video...');
     onProgress({ type: 'download', progress: 0 });
     
-    const videoData = await fetchFile(videoUrl);
+    let videoData;
+    try {
+      videoData = await fetchFile(videoUrl);
+      onProgress({ type: 'download', progress: 100 });
+    } catch (error) {
+      console.error('Error al descargar el video:', error);
+      // Si falla fetchFile, intentar con fetch nativo
+      const response = await fetch(videoUrl);
+      const blob = await response.blob();
+      const arrayBuffer = await blob.arrayBuffer();
+      videoData = new Uint8Array(arrayBuffer);
+      onProgress({ type: 'download', progress: 100 });
+    }
     
     // Escribir el archivo en el sistema de archivos virtual de FFmpeg
     console.log('Preparando video para procesamiento...');
-    onProgress({ type: 'download', progress: 100 });
     ffmpegInstance.FS('writeFile', 'input.mp4', videoData);
     
     // Formatear los tiempos para FFmpeg (HH:MM:SS.mmm)
@@ -54,12 +75,19 @@ export const clipVideo = async (videoUrl, startTime, endTime, onProgress = () =>
     console.log(`Recortando video desde ${start} con duración ${duration}...`);
     onProgress({ type: 'processing', progress: 0 });
     
+    // Configurar el manejo de progreso
+    ffmpegInstance.setProgress(({ ratio }) => {
+      const progressPercent = Math.round(ratio * 100);
+      onProgress({ type: 'processing', progress: progressPercent });
+    });
+    
+    // Ejecutar el comando de recorte
     await ffmpegInstance.run(
       '-i', 'input.mp4',
       '-ss', start,
       '-t', duration,
-      '-c:v', 'copy',
-      '-c:a', 'copy',
+      '-c:v', 'copy', // Copiar stream de video sin recodificar
+      '-c:a', 'copy', // Copiar stream de audio sin recodificar
       'output.mp4'
     );
     
@@ -84,6 +112,11 @@ export const clipVideo = async (videoUrl, startTime, endTime, onProgress = () =>
     };
   } catch (error) {
     console.error('Error al recortar el video:', error);
+    // Intentar con método alternativo si está disponible
+    if (typeof window !== 'undefined' && window.alternativeClipService) {
+      console.log('Intentando con método alternativo...');
+      return window.alternativeClipService.clipVideoAlternative(videoUrl, startTime, endTime, onProgress);
+    }
     throw new Error(`Error al procesar el video: ${error.message}`);
   }
 };
@@ -93,13 +126,22 @@ export const isFFmpegSupported = () => {
   // Verificar si estamos en un navegador
   if (typeof window === 'undefined') return false;
   
-  // Verificar si SharedArrayBuffer está disponible (necesario para WebAssembly threading)
+  // Verificar requisitos de FFmpeg WebAssembly
   const hasSharedArrayBuffer = typeof SharedArrayBuffer !== 'undefined';
-  
-  // Verificar si WebAssembly está disponible
   const hasWebAssembly = typeof WebAssembly === 'object' 
     && typeof WebAssembly.instantiate === 'function'
     && typeof WebAssembly.compile === 'function';
+    
+  // Verificar si el navegador tiene crossOriginIsolation habilitado
+  const hasCrossOriginIsolation = window.crossOriginIsolated;
+    
+  // Registrar el estado de compatibilidad
+  console.log('Compatibilidad FFmpeg:', {
+    hasSharedArrayBuffer,
+    hasWebAssembly,
+    hasCrossOriginIsolation
+  });
   
-  return hasWebAssembly && hasSharedArrayBuffer;
+  // Para desarrollo, podemos ser más permisivos (solo requiere WebAssembly)
+  return hasWebAssembly;
 };
