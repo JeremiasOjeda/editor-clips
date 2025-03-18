@@ -26,16 +26,16 @@ const SAMPLE_VIDEOS = {
   },
   'demo3': {
     id: 'demo3',
-    title: 'Sintel (Sample)',
-    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4',
-    duration: 888, // 14:48 en segundos
-    thumbnail: 'https://durian.blender.org/wp-content/uploads/2010/06/sintel-1280x720.jpg'
+    title: 'Grabacion de partido 2',
+    url: 'https://res.cloudinary.com/duy3ncazx/video/upload/v1741812770/Videos%20del%20Recinto/w8idxnxya7qmbgbwtfc5.mp4',
+    duration: 28, // 00:28 en segundos
+    thumbnail: ''
   },
   'demo4': {
     id: 'demo4',
-    title: 'Tears of Steel (Sample)',
-    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4',
-    duration: 734, // 12:14 en segundos
+    title: 'Grabacion de partido',
+    url: 'https://res.cloudinary.com/duy3ncazx/video/upload/v1741813693/Videos%20del%20Recinto/tiscx94szyl6u4ysuhhn.mp4',
+    duration: 13, // 12:14 en segundos
     thumbnail: ''
   }
 };
