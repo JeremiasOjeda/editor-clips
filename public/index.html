@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
   <head>
     <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
@@ -11,9 +11,16 @@
       name="description"
       content="Editor de clips de video - Recorta y descarga fragmentos específicos de videos largos"
     />
+    
     <!-- Estas dos líneas son críticas para el funcionamiento de FFmpeg -->
     <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin" />
     <meta http-equiv="Cross-Origin-Embedder-Policy" content="require-corp" />
+    
+    <!-- Añadimos estas etiquetas permitir que la app acceda a recursos de otros dominios -->
+    <meta http-equiv="Referrer-Policy" content="no-referrer-when-downgrade" />
+    
+    <!-- Quitamos Content-Security-Policy ya que puede interferir con la carga de videos -->
+    
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
     <title>Editor de Clips de Video</title>
