@@ -1,18 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Container, Typography, Box, Button, Grid, Paper, CircularProgress, Alert } from '@mui/material';
+import { useParams } from 'react-router-dom';
+import { 
+  Container, Typography, Box, Button, Grid, Paper, 
+  CircularProgress, Alert, FormControlLabel, Switch 
+} from '@mui/material';
 import { Download, ArrowBack } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
 import VideoPlayer from '../components/VideoPlayer';
+import SimpleVideoPlayer from '../components/SimpleVideoPlayer';
 import ClipSelector from '../components/ClipSelector';
 import { getVideoByCode } from '../services/videoService';
 
 function VideoPage() {
   const { code } = useParams();
-  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [video, setVideo] = useState(null);
+  const [useAdvancedPlayer, setUseAdvancedPlayer] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -21,9 +25,11 @@ function VideoPage() {
       try {
         setLoading(true);
         setError(null);
+        console.log(`Intentando cargar video con código: ${code}`);
         const videoData = await getVideoByCode(code);
         
         if (isMounted) {
+          console.log('Video cargado correctamente:', videoData);
           setVideo(videoData);
           setLoading(false);
         }
@@ -96,7 +102,24 @@ function VideoPage() {
 
         <Grid container spacing={3}>
           <Grid item xs={12}>
-            <VideoPlayer videoSrc={video.url} />
+            <Box mb={2}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={useAdvancedPlayer}
+                    onChange={() => setUseAdvancedPlayer(!useAdvancedPlayer)}
+                    name="playerToggle"
+                    color="primary"
+                  />
+                }
+                label="Usar reproductor avanzado (experimental)"
+              />
+            </Box>
+            {useAdvancedPlayer ? (
+              <VideoPlayer videoSrc={video.url} />
+            ) : (
+              <SimpleVideoPlayer videoSrc={video.url} />
+            )}
           </Grid>
           <Grid item xs={12} md={8}>
             <ClipSelector totalDuration={video.duration} />
