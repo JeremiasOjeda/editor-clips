@@ -3,7 +3,6 @@ import {
   Box, Slider, Typography, Paper, Grid, 
   TextField, Button, Stack 
 } from '@mui/material';
-import { ContentCut } from '@mui/icons-material';
 
 function ClipSelector({ totalDuration = 60, onSelectionChange }) {
   const [range, setRange] = useState([0, Math.min(30, totalDuration)]);

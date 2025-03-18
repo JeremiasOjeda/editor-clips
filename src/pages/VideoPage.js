@@ -184,7 +184,7 @@ function VideoPage() {
         URL.revokeObjectURL(clipUrl);
       }
     };
-  }, [code]);
+  }, [code, clipUrl]);
 
   if (loading) {
     return (
