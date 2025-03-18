@@ -1,16 +1,77 @@
-import React from 'react';
-import { useParams } from 'react-router-dom';
-import { Container, Typography, Box, Button, Grid, Paper } from '@mui/material';
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Container, Typography, Box, Button, Grid, Paper, CircularProgress, Alert } from '@mui/material';
 import { Download, ArrowBack } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
 import VideoPlayer from '../components/VideoPlayer';
 import ClipSelector from '../components/ClipSelector';
+import { getVideoByCode } from '../services/videoService';
 
 function VideoPage() {
   const { code } = useParams();
-  
-  // En un escenario real, obtendríamos el video basado en este código
-  const videoUrl = `https://example.com/videos/${code}.mp4`;
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [video, setVideo] = useState(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadVideo = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const videoData = await getVideoByCode(code);
+        
+        if (isMounted) {
+          setVideo(videoData);
+          setLoading(false);
+        }
+      } catch (err) {
+        if (isMounted) {
+          console.error('Error al cargar el video:', err);
+          setError(err.message || 'No se pudo cargar el video');
+          setLoading(false);
+        }
+      }
+    };
+
+    loadVideo();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [code]);
+
+  if (loading) {
+    return (
+      <Container>
+        <Box display="flex" justifyContent="center" alignItems="center" minHeight="80vh">
+          <CircularProgress />
+        </Box>
+      </Container>
+    );
+  }
+
+  if (error) {
+    return (
+      <Container>
+        <Box my={4}>
+          <Button 
+            component={Link} 
+            to="/" 
+            startIcon={<ArrowBack />}
+            sx={{ mb: 2 }}
+          >
+            Volver al inicio
+          </Button>
+          <Alert severity="error">
+            {error}
+          </Alert>
+        </Box>
+      </Container>
+    );
+  }
 
   return (
     <Container maxWidth="lg">
@@ -25,7 +86,7 @@ function VideoPage() {
             Volver
           </Button>
           <Typography variant="h4" component="h1">
-            Editor de Clips
+            {video.title}
           </Typography>
         </Box>
 
@@ -35,10 +96,10 @@ function VideoPage() {
 
         <Grid container spacing={3}>
           <Grid item xs={12}>
-            <VideoPlayer videoSrc={videoUrl} />
+            <VideoPlayer videoSrc={video.url} />
           </Grid>
           <Grid item xs={12} md={8}>
-            <ClipSelector />
+            <ClipSelector totalDuration={video.duration} />
           </Grid>
           <Grid item xs={12} md={4}>
             <Paper elevation={2}>
