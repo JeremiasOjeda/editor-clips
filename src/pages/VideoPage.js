@@ -3,11 +3,11 @@ import { useParams } from 'react-router-dom';
 import { 
   Container, Typography, Box, Button, Grid, Paper, 
   CircularProgress, Alert, FormControlLabel, Switch, Snackbar,
-  Menu, MenuItem, ListItemIcon, ListItemText
+  Divider, ButtonGroup
 } from '@mui/material';
 import { 
   Download, ArrowBack, Warning, VideoLibrary, 
-  FileCopy, Settings, Info
+  Videocam, Link as LinkIcon
 } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
 import VideoPlayer from '../components/VideoPlayer';
@@ -15,21 +15,7 @@ import SimpleVideoPlayer from '../components/SimpleVideoPlayer';
 import ClipSelector from '../components/ClipSelector';
 import ProcessingProgress from '../components/ProcessingProgress';
 import { getVideoByCode } from '../services/videoService';
-import { clipVideo, isFFmpegSupported } from '../services/ffmpegService';
-// Importar servicios alternativos si existen
-let alternativeClipService;
-let basicClipService;
-
-try {
-  alternativeClipService = require('../services/alternativeClipService');
-  basicClipService = require('../services/basicClipService');
-  
-  // Hacer que los servicios alternativos estén disponibles globalmente
-  window.alternativeClipService = alternativeClipService;
-  window.basicClipService = basicClipService;
-} catch (err) {
-  console.log('Servicios alternativos no disponibles:', err);
-}
+import { clipVideo, isFFmpegSupported, openVideoWithTimeParams } from '../services/ffmpegService';
 
 function VideoPage() {
   const { code } = useParams();
@@ -46,37 +32,13 @@ function VideoPage() {
   const [processStatus, setProcessStatus] = useState('idle'); // idle, initializing, downloading, processing, complete, error
   const [processProgress, setProcessProgress] = useState(0);
   const [clipUrl, setClipUrl] = useState(null);
+  const [processingError, setProcessingError] = useState(null);
   
   // Estado para notificaciones
-  const [notification, setNotification] = useState({ open: false, message: '' });
+  const [notification, setNotification] = useState({ open: false, message: '', severity: 'info' });
   
-  // Estado para el menú de opciones de descarga
-  const [anchorEl, setAnchorEl] = useState(null);
-  const openMenu = Boolean(anchorEl);
-  
-  // Verificar compatibilidad de métodos de procesamiento
-  const [ffmpegSupported, setFfmpegSupported] = useState(true);
-  const [alternativeSupported, setAlternativeSupported] = useState(false);
-  const [methodToUse, setMethodToUse] = useState('ffmpeg'); // ffmpeg, alternative, basic
-  
-  useEffect(() => {
-    // Verificar soporte de FFmpeg
-    const ffmpegSupport = isFFmpegSupported();
-    setFfmpegSupported(ffmpegSupport);
-    
-    // Verificar soporte de método alternativo
-    const alternativeSupport = alternativeClipService && alternativeClipService.isAlternativeMethodSupported();
-    setAlternativeSupported(alternativeSupport);
-    
-    // Establecer método por defecto basado en compatibilidad
-    if (ffmpegSupport) {
-      setMethodToUse('ffmpeg');
-    } else if (alternativeSupport) {
-      setMethodToUse('alternative');
-    } else {
-      setMethodToUse('basic');
-    }
-  }, []);
+  // Verificar compatibilidad de FFmpeg
+  const [ffmpegSupported] = useState(isFFmpegSupported());
   
   // Función para manejar cambios en la selección de clip
   const handleSelectionChange = (start, end) => {
@@ -86,6 +48,7 @@ function VideoPage() {
     // Restablecer el estado de procesamiento si cambia la selección
     if (processStatus === 'complete' || processStatus === 'error') {
       setProcessStatus('idle');
+      setProcessingError(null);
       if (clipUrl) {
         URL.revokeObjectURL(clipUrl);
         setClipUrl(null);
@@ -93,36 +56,80 @@ function VideoPage() {
     }
   };
   
-  // Función para abrir el menú de opciones de descarga
-  const handleOpenMenu = (event) => {
-    setAnchorEl(event.currentTarget);
-  };
-  
-  // Función para cerrar el menú de opciones de descarga
-  const handleCloseMenu = () => {
-    setAnchorEl(null);
-  };
-  
-  // Función para seleccionar el método de procesamiento
-  const handleSelectMethod = (method) => {
-    setMethodToUse(method);
-    handleCloseMenu();
+  // Método directo simplificado para abrir clip en una nueva ventana
+  const handleOpenDirectClip = () => {
+    if (!video || !video.url) return;
+    
+    // Usar la función existente de ffmpegService
+    openVideoWithTimeParams(video.url, clipStart, clipEnd);
+    
     setNotification({
       open: true,
-      message: `Método de procesamiento cambiado a ${method}`
+      message: 'Se ha abierto el fragmento del video en una nueva pestaña.',
+      severity: 'info'
     });
   };
   
-  // Función para procesar y descargar el clip
+  // Método directo para descargar (puede no funcionar para todos los videos)
+  const handleDirectDownload = () => {
+    if (!video || !video.url) return;
+    
+    try {
+      // Crear URL con parámetros de tiempo
+      const separator = video.url.includes('?') ? '&' : '#';
+      const clipUrl = `${video.url}${separator}t=${clipStart},${clipEnd}`;
+      
+      // Formatear nombre de archivo
+      const safeTitle = code.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+      const fileName = `clip_${safeTitle}_${formatTimeForFilename(clipStart)}-${formatTimeForFilename(clipEnd)}.mp4`;
+      
+      // Crear elemento de enlace para descarga
+      const a = document.createElement('a');
+      a.href = clipUrl;
+      a.download = fileName; // Puede no funcionar para videos cross-origin
+      a.target = '_blank';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      
+      setNotification({
+        open: true,
+        message: 'Se está intentando descargar el fragmento. Puede abrirse en una nueva pestaña debido a restricciones del navegador.',
+        severity: 'info'
+      });
+    } catch (error) {
+      console.error('Error al intentar descarga directa:', error);
+      
+      // Si falla, intentar abrir en una nueva ventana
+      handleOpenDirectClip();
+      
+      setNotification({
+        open: true,
+        message: 'No se pudo descargar directamente. Se ha abierto en una nueva pestaña.',
+        severity: 'warning'
+      });
+    }
+  };
+  
+  // Formatear tiempo para nombres de archivo (MMSS format)
+  const formatTimeForFilename = (seconds) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+    return `${minutes.toString().padStart(2, '0')}${remainingSeconds.toString().padStart(2, '0')}`;
+  };
+  
+  // Función para procesar y descargar el clip usando FFmpeg
   const handleProcessClip = async () => {
     try {
       // Limpiar URL anterior si existe
       if (clipUrl) {
         URL.revokeObjectURL(clipUrl);
+        setClipUrl(null);
       }
       
       setProcessStatus('initializing');
       setProcessProgress(0);
+      setProcessingError(null);
       
       // Registrar datos de auditoría (esto sería una llamada a una API en una aplicación real)
       const auditData = {
@@ -130,87 +137,57 @@ function VideoPage() {
         videoTitle: video.title,
         clipStart,
         clipEnd,
-        methodUsed: methodToUse,
         device: navigator.userAgent,
         timestamp: new Date().toISOString()
       };
       console.log('Datos de auditoría:', auditData);
       
-      let result;
-      
-      // Procesar el video según el método seleccionado
-      switch (methodToUse) {
-        case 'ffmpeg':
-          result = await clipVideo(
-            video.url,
-            clipStart,
-            clipEnd,
-            (progress) => {
-              setProcessStatus(progress.type);
-              setProcessProgress(progress.progress);
-            }
-          );
-          break;
-          
-        case 'alternative':
-          if (alternativeClipService) {
-            result = await alternativeClipService.clipVideoAlternative(
-              video.url,
-              clipStart,
-              clipEnd,
-              (progress) => {
-                setProcessStatus(progress.type);
-                setProcessProgress(progress.progress);
-              }
-            );
-          } else {
-            throw new Error('El método alternativo no está disponible');
-          }
-          break;
-          
-        case 'basic':
-          if (basicClipService) {
-            result = await basicClipService.clipVideoBasic(
-              video.url,
-              clipStart,
-              clipEnd,
-              (progress) => {
-                setProcessStatus(progress.type);
-                setProcessProgress(progress.progress);
-              }
-            );
-          } else {
-            throw new Error('El método básico no está disponible');
-          }
-          break;
-          
-        default:
-          throw new Error('Método de procesamiento no válido');
+      // Verificar si el clip es demasiado largo (más de 2 minutos podría causar problemas)
+      const clipDuration = clipEnd - clipStart;
+      if (clipDuration > 120) {
+        setNotification({
+          open: true,
+          message: 'El clip seleccionado es muy largo y podría causar problemas. Considera usar un fragmento más corto o el método directo.',
+          severity: 'warning'
+        });
       }
+      
+      // Procesar el video
+      const result = await clipVideo(
+        video.url,
+        clipStart,
+        clipEnd,
+        (progress) => {
+          if (progress.type === 'download') {
+            setProcessStatus('downloading');
+            setProcessProgress(progress.progress);
+          } else if (progress.type === 'processing') {
+            setProcessStatus('processing');
+            setProcessProgress(progress.progress);
+          }
+        }
+      );
       
       // Actualizar estado con la URL del clip
       setClipUrl(result.url);
       setProcessStatus('complete');
       
-      // Si el resultado es una URL directa, informar al usuario
-      if (result.isDirectURL) {
-        setNotification({
-          open: true,
-          message: 'Se generó un enlace directo al fragmento. La descarga puede contener el video completo.'
-        });
-      } else {
-        setNotification({
-          open: true,
-          message: 'Clip procesado correctamente. Haz clic en Descargar para guardar.'
-        });
-      }
+      // Mostrar notificación de éxito
+      setNotification({
+        open: true,
+        message: 'Clip procesado correctamente. Haz clic en Descargar para guardar.',
+        severity: 'success'
+      });
       
     } catch (err) {
       console.error('Error al procesar el clip:', err);
       setProcessStatus('error');
+      setProcessingError(err.message || 'Error desconocido al procesar el video');
+      
       setNotification({
         open: true,
-        message: `Error: ${err.message}`
+        message: `Error: ${err.message}`,
+        severity: 'error'
       });
     }
   };
@@ -225,13 +202,6 @@ function VideoPage() {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-  };
-  
-  // Formatear tiempo para nombre de archivo (MM-SS)
-  const formatTimeForFilename = (seconds) => {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = Math.floor(seconds % 60);
-    return `${minutes.toString().padStart(2, '0')}-${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
   // Cerrar notificación
@@ -279,7 +249,7 @@ function VideoPage() {
         URL.revokeObjectURL(clipUrl);
       }
     };
-  }, [code, clipUrl]);
+  }, [code]);
 
   if (loading) {
     return (
@@ -332,14 +302,14 @@ function VideoPage() {
           Código del video: {code}
         </Typography>
         
-        {!ffmpegSupported && !alternativeSupported && (
+        {!ffmpegSupported && (
           <Alert 
             severity="warning" 
             icon={<Warning />}
             sx={{ mb: 3 }}
           >
-            Tu navegador tiene limitaciones de compatibilidad para el procesamiento avanzado de video.
-            Se utilizará un método simplificado que podría descargar el video completo con marcadores de tiempo.
+            Tu navegador puede tener limitaciones para el procesamiento avanzado de video.
+            Si el método avanzado no funciona, utiliza el método directo.
           </Alert>
         )}
 
@@ -373,119 +343,89 @@ function VideoPage() {
           <Grid item xs={12} md={4}>
             <Paper elevation={2}>
               <Box p={3}>
-                <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                  <Typography variant="h6">
-                    Descargar Clip
-                  </Typography>
-                  <Button
-                    size="small"
-                    startIcon={<Settings />}
-                    onClick={handleOpenMenu}
-                    variant="outlined"
-                  >
-                    Opciones
-                  </Button>
-                  <Menu
-                    anchorEl={anchorEl}
-                    open={openMenu}
-                    onClose={handleCloseMenu}
-                  >
-                    <MenuItem
-                      selected={methodToUse === 'ffmpeg'}
-                      onClick={() => handleSelectMethod('ffmpeg')}
-                      disabled={!ffmpegSupported}
-                    >
-                      <ListItemIcon>
-                        <VideoLibrary fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText 
-                        primary="FFmpeg (Mejor calidad)" 
-                        secondary={!ffmpegSupported ? "No compatible con tu navegador" : ""}
-                      />
-                    </MenuItem>
-                    <MenuItem
-                      selected={methodToUse === 'alternative'}
-                      onClick={() => handleSelectMethod('alternative')}
-                      disabled={!alternativeSupported}
-                    >
-                      <ListItemIcon>
-                        <FileCopy fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText 
-                        primary="Alternativo (Experimental)" 
-                        secondary={!alternativeSupported ? "No compatible con tu navegador" : ""}
-                      />
-                    </MenuItem>
-                    <MenuItem
-                      selected={methodToUse === 'basic'}
-                      onClick={() => handleSelectMethod('basic')}
-                    >
-                      <ListItemIcon>
-                        <Info fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText 
-                        primary="Básico (Compatible con todos)" 
-                        secondary="Descarga con referencia de tiempo"
-                      />
-                    </MenuItem>
-                  </Menu>
-                </Box>
-                
-                <Box my={2}>
-                  <ProcessingProgress 
-                    status={processStatus} 
-                    progress={processProgress}
-                  />
-                </Box>
-                
-                <Box mt={3} display="flex" flexDirection="column" gap={1}>
-                  {processStatus !== 'complete' ? (
-                    <Button 
-                      variant="contained" 
-                      color="primary" 
-                      startIcon={<Download />}
-                      fullWidth
-                      onClick={handleProcessClip}
-                      disabled={processStatus === 'initializing' || 
-                               processStatus === 'downloading' || 
-                               processStatus === 'processing'}
-                    >
-                      Procesar Clip
-                    </Button>
-                  ) : (
-                    <Button 
-                      variant="contained" 
-                      color="success" 
-                      startIcon={<Download />}
-                      fullWidth
-                      onClick={handleDownloadClip}
-                    >
-                      Descargar Clip
-                    </Button>
-                  )}
-                </Box>
-                
-                <Typography variant="caption" color="textSecondary" display="block" mt={2}>
-                  *El procesamiento puede tardar unos momentos dependiendo del tamaño del clip
+                <Typography variant="h6" gutterBottom>
+                  Descargar Clip
                 </Typography>
                 
-                {methodToUse === 'ffmpeg' && (
-                  <Typography variant="caption" color="primary" display="block" mt={1}>
-                    Usando FFmpeg para procesamiento de alta calidad
+                {/* Método directo */}
+                <Box my={2}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Método Directo (Recomendado)
                   </Typography>
-                )}
+                  <Typography variant="body2" color="textSecondary" paragraph>
+                    Abre o intenta descargar el fragmento sin procesamiento.
+                  </Typography>
+                  <ButtonGroup variant="outlined" fullWidth>
+                    <Button 
+                      startIcon={<Videocam />}
+                      onClick={handleOpenDirectClip}
+                    >
+                      Abrir Fragmento
+                    </Button>
+                    <Button 
+                      startIcon={<LinkIcon />}
+                      onClick={handleDirectDownload}
+                    >
+                      Descargar
+                    </Button>
+                  </ButtonGroup>
+                </Box>
                 
-                {methodToUse === 'alternative' && (
-                  <Typography variant="caption" color="secondary" display="block" mt={1}>
-                    Usando método alternativo (experimental)
-                  </Typography>
-                )}
+                <Divider sx={{ my: 3 }} />
                 
-                {methodToUse === 'basic' && (
-                  <Typography variant="caption" color="info.main" display="block" mt={1}>
-                    Usando método básico (compatible con todos los navegadores)
+                {/* Método avanzado */}
+                <Box my={2}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Método Avanzado (FFmpeg)
                   </Typography>
-                )}
+                  <Typography variant="body2" color="textSecondary" paragraph>
+                    Procesa el video en tu navegador. Ideal para clips cortos.
+                  </Typography>
+                  
+                  <Box my={2}>
+                    <ProcessingProgress 
+                      status={processStatus} 
+                      progress={processProgress}
+                    />
+                  </Box>
+                  
+                  {processingError && (
+                    <Alert severity="error" sx={{ mb: 2 }}>
+                      {processingError}
+                    </Alert>
+                  )}
+                  
+                  <Box mt={2}>
+                    {processStatus !== 'complete' ? (
+                      <Button 
+                        variant="contained" 
+                        color="primary" 
+                        startIcon={<VideoLibrary />}
+                        fullWidth
+                        onClick={handleProcessClip}
+                        disabled={processStatus === 'initializing' || 
+                                processStatus === 'downloading' || 
+                                processStatus === 'processing'}
+                      >
+                        Procesar Clip
+                      </Button>
+                    ) : (
+                      <Button 
+                        variant="contained" 
+                        color="success" 
+                        startIcon={<Download />}
+                        fullWidth
+                        onClick={handleDownloadClip}
+                      >
+                        Descargar Clip
+                      </Button>
+                    )}
+                  </Box>
+                </Box>
+                
+                <Typography variant="caption" color="textSecondary" display="block" mt={3}>
+                  *El método avanzado puede tardar más tiempo pero permite descargar un archivo que contiene exactamente el fragmento seleccionado.
+                </Typography>
               </Box>
             </Paper>
           </Grid>
@@ -497,8 +437,15 @@ function VideoPage() {
         open={notification.open}
         autoHideDuration={6000}
         onClose={handleCloseNotification}
-        message={notification.message}
-      />
+      >
+        <Alert 
+          onClose={handleCloseNotification} 
+          severity={notification.severity || 'info'}
+          sx={{ width: '100%' }}
+        >
+          {notification.message}
+        </Alert>
+      </Snackbar>
     </Container>
   );
 }
