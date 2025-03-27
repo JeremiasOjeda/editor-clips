@@ -6,8 +6,8 @@ const SAMPLE_VIDEOS = {
   'test': {
     id: 'test',
     title: 'Video Test (pequeño)',
-    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', // Video de ejemplo confiable
-    duration: 15, // 15 segundos
+    url: 'https://res.cloudinary.com/duy3ncazx/video/upload/v1741813694/Videos%20del%20Recinto/cgg12e807zcnzyiayois.mp4', // Video de ejemplo confiable
+    duration: 24, // 24 segundos
     thumbnail: ''
   },
   'demo1': {
