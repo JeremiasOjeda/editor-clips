@@ -2,15 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { 
   Container, Typography, Box, Button, Grid, Paper, 
-  CircularProgress, Alert, FormControlLabel, Switch, Snackbar,
+  CircularProgress, Alert, Snackbar,
   Divider, ButtonGroup
 } from '@mui/material';
 import { 
   Download, ArrowBack, Warning, VideoLibrary, 
-  Videocam, Link as LinkIcon
+  Videocam
 } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
-import VideoPlayer from '../components/VideoPlayer';
 import SimpleVideoPlayer from '../components/SimpleVideoPlayer';
 import ClipSelector from '../components/ClipSelector';
 import ProcessingProgress from '../components/ProcessingProgress';
@@ -27,7 +26,6 @@ function VideoPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [video, setVideo] = useState(null);
-  const [useAdvancedPlayer, setUseAdvancedPlayer] = useState(false);
   
   // Estado para la selección de clip
   const [clipStart, setClipStart] = useState(0);
@@ -45,11 +43,11 @@ function VideoPage() {
   // Verificar compatibilidad de FFmpeg
   const [ffmpegSupported] = useState(isFFmpegSupported());
   
-  // Método para verificar si el navegador admite la descarga directa
-  const canUseDownloadAttribute = () => {
-    const a = document.createElement('a');
-    return typeof a.download !== 'undefined';
-  };
+  // Esta función es utilizada solo en el método handleDirectDownload que ha sido eliminado
+  // const canUseDownloadAttribute = () => {
+  //   const a = document.createElement('a');
+  //   return typeof a.download !== 'undefined';
+  // };
   
   // Función para manejar cambios en la selección de clip
   const handleSelectionChange = (start, end) => {
@@ -81,58 +79,12 @@ function VideoPage() {
     });
   };
   
-  // Método mejorado para la descarga directa
+  // Método para abrir o descargar directamente el fragmento (mantenenido para referencia)
+  /* 
   const handleDirectDownload = () => {
-    if (!video || !video.url) return;
-    
-    try {
-      // Crear URL con parámetros de tiempo
-      const separator = video.url.includes('?') ? '&' : '#';
-      const clipUrl = `${video.url}${separator}t=${clipStart},${clipEnd}`;
-      
-      // Formatear nombre de archivo
-      const safeTitle = code.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-      const fileName = `clip_${safeTitle}_${formatTimeForFilename(clipStart)}-${formatTimeForFilename(clipEnd)}.mp4`;
-      
-      // Verificamos si podemos usar el atributo download
-      if (canUseDownloadAttribute()) {
-        // Crear elemento de enlace para descarga (puede no funcionar para videos cross-origin)
-        const a = document.createElement('a');
-        a.href = clipUrl;
-        a.download = fileName;
-        a.target = '_blank';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        
-        // Indicamos al usuario que esto puede abrir una nueva pestaña en lugar de descargar
-        setNotification({
-          open: true,
-          message: 'Intentando descargar fragmento. Si se abre en el navegador en lugar de descargarse, prueba el método avanzado.',
-          severity: 'info'
-        });
-      } else {
-        // Si no podemos usar download, abrimos en una nueva ventana
-        window.open(clipUrl, '_blank');
-        setNotification({
-          open: true,
-          message: 'Tu navegador no soporta descarga directa. Se ha abierto el fragmento en una nueva pestaña.',
-          severity: 'warning'
-        });
-      }
-    } catch (error) {
-      console.error('Error al intentar descarga directa:', error);
-      
-      // Si falla, intentar abrir en una nueva ventana
-      handleOpenDirectClip();
-      
-      setNotification({
-        open: true,
-        message: 'No se pudo descargar directamente. Se ha abierto en una nueva pestaña.',
-        severity: 'warning'
-      });
-    }
+    // Implementación eliminada porque no se utiliza en la interfaz actual
   };
+  */
   
   // Formatear tiempo para nombres de archivo (MMSS format)
   const formatTimeForFilename = (seconds) => {
@@ -141,17 +93,7 @@ function VideoPage() {
     return `${minutes.toString().padStart(2, '0')}${remainingSeconds.toString().padStart(2, '0')}`;
   };
   
-  // Método para comprobar si el clip seleccionado es de una duración razonable
-  const isReasonableClipLength = () => {
-    // Para videos grandes, solo permitir clips cortos
-    const clipDuration = clipEnd - clipStart;
-    
-    if (clipDuration > 120) {
-      return false; // Más de 2 minutos es mucho para proceso en navegador
-    }
-    
-    return true;
-  };
+  // Verificación de la duración del clip se realiza directamente en handleProcessClip
   
   
   // Método mejorado para el procesamiento con FFmpeg y fallback
@@ -498,24 +440,7 @@ function VideoPage() {
 
         <Grid container spacing={3}>
           <Grid item xs={12}>
-            <Box mb={2}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={useAdvancedPlayer}
-                    onChange={() => setUseAdvancedPlayer(!useAdvancedPlayer)}
-                    name="playerToggle"
-                    color="primary"
-                  />
-                }
-                label="Usar reproductor avanzado (experimental)"
-              />
-            </Box>
-            {useAdvancedPlayer ? (
-              <VideoPlayer videoSrc={video.url} />
-            ) : (
-              <SimpleVideoPlayer videoSrc={video.url} />
-            )}
+            <SimpleVideoPlayer videoSrc={video.url} />
           </Grid>
           <Grid item xs={12} md={8}>
             <ClipSelector 

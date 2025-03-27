@@ -9,8 +9,12 @@ function SimpleVideoPlayer({ videoSrc }) {
   useEffect(() => {
     // Si hay una referencia al video y una URL válida
     if (videoRef.current && videoSrc) {
+      // Guardamos la referencia en una variable dentro del efecto
+      // para evitar problemas con el cleanup de React
+      const currentVideoElement = videoRef.current;
+      
       // Forzar recarga del video cuando cambia la fuente
-      videoRef.current.load();
+      currentVideoElement.load();
       
       // Log para debug
       console.log("Cargando video:", videoSrc);
@@ -20,15 +24,17 @@ function SimpleVideoPlayer({ videoSrc }) {
         console.error("Error al cargar el video:", e);
       };
       
-      videoRef.current.addEventListener('error', handleError);
+      currentVideoElement.addEventListener('error', handleError);
       
+      // Función de limpieza que usa la variable local
       return () => {
-        if (videoRef.current) {
-          videoRef.current.removeEventListener('error', handleError);
+        // Verificamos si el elemento todavía existe antes de quitar el listener
+        if (currentVideoElement) {
+          currentVideoElement.removeEventListener('error', handleError);
         }
       };
     }
-  }, [videoSrc]);
+  }, [videoSrc]); // Solo se ejecuta cuando cambia videoSrc
 
   if (!videoSrc) {
     return (
