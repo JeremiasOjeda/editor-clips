@@ -37,6 +37,13 @@ const SAMPLE_VIDEOS = {
     url: 'https://res.cloudinary.com/duy3ncazx/video/upload/v1741813693/Videos%20del%20Recinto/tiscx94szyl6u4ysuhhn.mp4',
     duration: 13, // 12:14 en segundos
     thumbnail: ''
+  },
+  'demo5': {
+    id: 'demo5',
+    title: 'Grabacion de partido de hoy',
+    url: 'https://res.cloudinary.com/duy3ncazx/video/upload/v1743190450/partido28-03_para_subir_exhnvb.mp4',
+    duration: 7200, // 2 horas en segundos
+    thumbnail: ''
   }
 };
 
