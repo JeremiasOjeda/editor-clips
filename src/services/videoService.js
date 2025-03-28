@@ -12,10 +12,10 @@ const SAMPLE_VIDEOS = {
   },
   'demo1': {
     id: 'demo1',
-    title: 'Big Buck Bunny (Sample)',
-    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-    duration: 596, // 9:56 en segundos
-    thumbnail: 'https://peach.blender.org/wp-content/uploads/bbb-splash.png'
+    title: 'Demo Largo Explicación',
+    url: 'https://upload.wikimedia.org/wikipedia/commons/0/01/-CPBR11_-_Palco_Makers_-_01-02-2018_01-00_-_01-45_-_O_movimento_maker_no_interior_de_SP_%E2%80%93.webm',
+    duration: 2529, // 42:09 en segundos
+    thumbnail: ''
   },
   'demo2': {
     id: 'demo2',
@@ -26,14 +26,14 @@ const SAMPLE_VIDEOS = {
   },
   'demo3': {
     id: 'demo3',
-    title: 'Grabacion de partido 2',
+    title: 'Grabacion de partido',
     url: 'https://res.cloudinary.com/duy3ncazx/video/upload/v1741812770/Videos%20del%20Recinto/w8idxnxya7qmbgbwtfc5.mp4',
     duration: 28, // 00:28 en segundos
     thumbnail: ''
   },
   'demo4': {
     id: 'demo4',
-    title: 'Grabacion de partido',
+    title: 'Grabacion de partido 2',
     url: 'https://res.cloudinary.com/duy3ncazx/video/upload/v1741813693/Videos%20del%20Recinto/tiscx94szyl6u4ysuhhn.mp4',
     duration: 13, // 12:14 en segundos
     thumbnail: ''
