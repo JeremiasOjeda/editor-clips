@@ -26,9 +26,9 @@ const SAMPLE_VIDEOS = {
   },
   'demo3': {
     id: 'demo3',
-    title: 'Grabacion de partido',
-    url: 'https://res.cloudinary.com/duy3ncazx/video/upload/v1741812770/Videos%20del%20Recinto/w8idxnxya7qmbgbwtfc5.mp4',
-    duration: 28, // 00:28 en segundos
+    title: 'Grabacion de partido Ayer',
+    url: 'https://vimeo.com/1070399133/ffda2dba5b',
+    duration: 7200, // 2 horas en segundos
     thumbnail: ''
   },
   'demo4': {
