@@ -394,23 +394,7 @@ function AdminPanel() {
           </TableContainer>
         )}
         
-        <Box mt={4}>
-          <Paper elevation={1} sx={{ p: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              Información
-            </Typography>
-            <Divider sx={{ mb: 2 }} />
-            <Typography variant="body2" paragraph>
-              • Los videos <strong>predeterminados</strong> no pueden ser eliminados.
-            </Typography>
-            <Typography variant="body2" paragraph>
-              • Los videos <strong>personalizados</strong> se guardan en el almacenamiento local del navegador.
-            </Typography>
-            <Typography variant="body2">
-              • El panel de administración está disponible en la ruta <code>/admin</code>.
-            </Typography>
-          </Paper>
-        </Box>
+
       </Box>
       
       {/* Diálogo para añadir/editar video */}
