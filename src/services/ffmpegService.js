@@ -40,194 +40,119 @@ const initFFmpeg = async () => {
   }
 };
 
-// Función para recortar un video usando FFmpeg
+// Función para recortar un video usando FFmpeg - ULTRA SIMPLIFICADA
 export const clipVideo = async (videoUrl, startTime, endTime, onProgress = () => { }) => {
   try {
-    // Inicializar FFmpeg
+    // Primero intentamos el enfoque más básico posible con FFmpeg
+    console.log('Iniciando procesamiento de video con método ultra-simplificado...');
     const ffmpegInstance = await initFFmpeg();
-
-    // Obtener el archivo de video
-    console.log('Descargando video...');
+    
+    // Notificar proceso
     onProgress({ type: 'download', progress: 0 });
-
+    
+    // Descarga simplificada
+    console.log('Descargando video...');
     let videoData;
     try {
       videoData = await fetchFile(videoUrl);
-      onProgress({ type: 'download', progress: 100 });
     } catch (fetchError) {
-      console.warn('Error con fetchFile, intentando fetch nativo:', fetchError);
-
-      try {
-        // Intentar con fetch nativo
-        const response = await fetch(videoUrl, {
-          mode: 'cors', // Intentar con CORS explícito
-          cache: 'no-cache' // Evitar problemas de caché
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const blob = await response.blob();
-        const arrayBuffer = await blob.arrayBuffer();
-        videoData = new Uint8Array(arrayBuffer);
-        onProgress({ type: 'download', progress: 100 });
-      } catch (nativeFetchError) {
-        throw new Error(`No se pudo descargar el video: ${nativeFetchError.message}`);
-      }
+      console.log('Error en fetchFile, intentando fetch nativo');
+      const response = await fetch(videoUrl);
+      const blob = await response.blob();
+      const arrayBuffer = await blob.arrayBuffer();
+      videoData = new Uint8Array(arrayBuffer);
     }
-
-    // Comprobar si el video es muy grande para procesar en el navegador (>50MB)
+    
+    onProgress({ type: 'download', progress: 100 });
+    
+    // Comprobar el tamaño y mostrar información al usuario
     const videoSizeInMB = videoData.length / (1024 * 1024);
     console.log(`Tamaño del video: ${videoSizeInMB.toFixed(2)}MB`);
-
-    // Verificar tamaño del video
+    
     if (videoSizeInMB > 200) {
-      // Demasiado grande para procesar con seguridad
-      throw new Error(`El video es extremadamente grande (${videoSizeInMB.toFixed(2)}MB) y no puede procesarse en el navegador. Usa el método directo.`);
-    } else if (videoSizeInMB > 50) {
-      // Grande pero podemos intentarlo
-      console.warn(`Video grande (${videoSizeInMB.toFixed(2)}MB). El procesamiento puede ser lento o fallar.`);
-
-      // Verificar si tenemos espacio para procesar (al menos 3 veces el tamaño del video)
-      const clipDuration = endTime - startTime;
-      const totalDuration = videoData.length / videoSizeInMB; // estimación aproximada
-
-      // Si el clip es proporcionalmente pequeño, podemos intentarlo
-      if (clipDuration && totalDuration && (clipDuration / totalDuration < 0.3)) {
-        console.log(`Clip seleccionado (${clipDuration}s) es proporcionalmente pequeño. Intentando procesar.`);
-      } else {
-        // Advertir pero continuar
-        console.warn(`Procesando un video grande. Esto puede fallar si no hay suficiente memoria disponible.`);
-      }
+      onProgress({ 
+        type: 'warning', 
+        message: `Video grande (${videoSizeInMB.toFixed(2)}MB). El procesamiento puede tardar más de lo normal.`
+      });
     }
-
-    // Escribir el archivo en el sistema de archivos virtual de FFmpeg
-    console.log('Preparando video para procesamiento...');
+    
+    // Escribir el archivo en el sistema de archivos virtual
     ffmpegInstance.FS('writeFile', 'input.mp4', videoData);
-
-    // Formatear los tiempos para FFmpeg (HH:MM:SS.mmm)
-    const formatTime = (seconds) => {
-      const hours = Math.floor(seconds / 3600);
-      const minutes = Math.floor((seconds % 3600) / 60);
-      const secs = Math.floor(seconds % 60);
-      const ms = Math.floor((seconds % 1) * 1000);
-      return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
-    };
-
-    const start = formatTime(startTime);
-    const duration = formatTime(endTime - startTime);
-
-    // Ejecutar el comando de recorte con una estrategia optimizada para navegadores
-    console.log(`Recortando video desde ${start} con duración ${duration}...`);
+    
+    // Notificar procesamiento
     onProgress({ type: 'processing', progress: 0 });
-
-    // Configurar el manejo de progreso
+    
+    console.log('Aplicando enfoque ultra-simplificado para evitar errores de compatibilidad');
+    
+    // Configurar progreso
     ffmpegInstance.setProgress(({ ratio }) => {
       if (ratio && !isNaN(ratio)) {
         const progressPercent = Math.min(100, Math.round(ratio * 100));
         onProgress({ type: 'processing', progress: progressPercent });
       }
     });
-
+    
+    // COMANDO ULTRA BÁSICO - Solo tomar un segmento del input
     try {
-      // Primer intento: método rápido sin recodificar (solo copia)
-      await ffmpegInstance.run(
-        '-ss', start,        // Poner el -ss antes de -i es más eficiente
-        '-i', 'input.mp4',
-        '-t', duration,
-        '-c', 'copy',        // Solo copiar sin recodificar
-        '-avoid_negative_ts', 'make_zero',  // Corregir timestamps negativos
-        '-reset_timestamps', '1',           // Resetear timestamps para mejor compatibilidad
-        'output.mp4'
-      );
+      // Convertir tiempos a enteros
+      const startSeconds = Math.floor(startTime);
+      const durationSeconds = Math.floor(endTime - startTime);
+      
+      // Comando lo más simple posible
+      await ffmpegInstance.run('-i', 'input.mp4', '-ss', `${startSeconds}`, '-t', `${durationSeconds}`, 'output.mp4');
+      
+      console.log('Procesamiento básico completado');
     } catch (ffmpegError) {
-      console.warn('Primer método falló, intentando método alternativo:', ffmpegError);
-
-      // Método alternativo: recodificar para mayor compatibilidad
-      await ffmpegInstance.run(
-        '-i', 'input.mp4',
-        '-ss', start,
-        '-t', duration,
-        '-c:v', 'libx264',     // Recodificar video para mayor compatibilidad
-        '-c:a', 'aac',         // Recodificar audio para mayor compatibilidad
-        '-strict', 'experimental',
-        '-b:a', '128k',        // Bitrate de audio razonable
-        '-preset', 'ultrafast', // Procesamiento más rápido
-        'output.mp4'
-      );
+      console.error('Error en procesamiento básico:', ffmpegError);
+      
+      // Si falla, caemos al método alternativo inmediatamente
+      throw new Error('Método básico falló, usando alternativa');
     }
-
+    
+    // Completar procesamiento
     onProgress({ type: 'processing', progress: 100 });
-    console.log('Video recortado correctamente');
-
-    // Leer el archivo de salida
+    
+    // Leer resultado
     const data = ffmpegInstance.FS('readFile', 'output.mp4');
-
-    // Limpiar memoria después de procesar
+    
+    // Limpiar
     try {
       ffmpegInstance.FS('unlink', 'input.mp4');
       ffmpegInstance.FS('unlink', 'output.mp4');
-    } catch (cleanupError) {
-      console.warn('Error al limpiar archivos temporales:', cleanupError);
-    }
-
-    // Crear un blob y una URL para descargar
+    } catch (e) {}
+    
+    // Crear blob y URL
     const blob = new Blob([data.buffer], { type: 'video/mp4' });
     const url = URL.createObjectURL(blob);
-
+    
     return {
       url,
       blob,
       size: blob.size,
       format: 'video/mp4'
     };
+    
   } catch (error) {
-    console.error('Error en procesamiento de video:', error);
-    throw error;
+    console.error('FFmpeg falló completamente. Usando método alternativo:', error);
+    
+    // Si todo falla, usar el método alternativo simple
+    return clipVideoSimple(videoUrl, startTime, endTime, onProgress);
   }
 };
 
 // Verificar si FFmpeg está disponible en el navegador
 export const isFFmpegSupported = () => {
   try {
-    // Verificar soporte para WebAssembly
-    if (typeof WebAssembly === 'undefined') {
-      console.warn('WebAssembly no está soportado en este navegador');
-      return false;
-    }
-
-    // Verificar soporte para SharedArrayBuffer (necesario para trabajar con hilos)
-    if (typeof SharedArrayBuffer === 'undefined') {
-      console.warn('SharedArrayBuffer no está soportado en este navegador');
-      return false;
-    }
-
-    // Verificar soporte para las APIs necesarias
-    const requiredApis = [
-      'Blob',
-      'URL',
-      'Promise',
-      'File',
-      'FileReader',
-      'fetch'
-    ];
-
-    for (const api of requiredApis) {
-      if (typeof window[api] === 'undefined') {
-        console.warn(`API ${api} no está soportada en este navegador`);
-        return false;
-      }
-    }
-
-    return true;
+    return typeof WebAssembly !== 'undefined' && 
+           typeof SharedArrayBuffer !== 'undefined' && 
+           typeof Blob !== 'undefined' && 
+           typeof URL !== 'undefined';
   } catch (error) {
-    console.error('Error al verificar compatibilidad:', error);
     return false;
   }
 };
 
-// NUEVO: Función alternativa simplificada para recortar videos sin FFmpeg
+// Función simplificada para recortar videos sin FFmpeg
 export const clipVideoSimple = async (videoUrl, startTime, endTime, onProgress = () => { }) => {
   return new Promise((resolve, reject) => {
     try {
@@ -235,33 +160,36 @@ export const clipVideoSimple = async (videoUrl, startTime, endTime, onProgress =
       onProgress({ type: 'initializing', progress: 0 });
       console.log('Iniciando método simplificado de recorte...');
 
-      // Mostrar progreso simulado
+      // Simular progreso
       onProgress({ type: 'download', progress: 50 });
+      setTimeout(() => onProgress({ type: 'download', progress: 100 }), 500);
+      
+      setTimeout(() => {
+        onProgress({ type: 'processing', progress: 50 });
+        
+        // Generar URL con parámetros de tiempo
+        const urlWithTimeParams = `${videoUrl}#t=${startTime},${endTime}`;
+        
+        setTimeout(() => {
+          onProgress({ type: 'processing', progress: 100 });
+          
+          // Mostrar mensaje informativo
+          onProgress({ 
+            type: 'warning', 
+            message: 'Usando método alternativo que abre el video en el tiempo seleccionado.'
+          });
 
-      // Crear una URL con parámetros de tiempo
-      let urlWithTimeParams = videoUrl;
-
-      // Agregar parámetros de tiempo a la URL
-      if (videoUrl.includes('?')) {
-        urlWithTimeParams = `${videoUrl}&t=${startTime}`;
-      } else {
-        urlWithTimeParams = `${videoUrl}#t=${startTime},${endTime}`;
-      }
-
-      console.log('URL con parámetros de tiempo:', urlWithTimeParams);
-
-      onProgress({ type: 'processing', progress: 100 });
-
-      // Devolver la URL modificada con una advertencia
-      resolve({
-        url: urlWithTimeParams,
-        isDirectURL: true,
-        isSimpleMethod: true,
-        size: 0,
-        format: 'video/mp4'
-      });
+          // Devolver la URL modificada
+          resolve({
+            url: urlWithTimeParams,
+            isDirectURL: true,
+            isSimpleMethod: true,
+            size: 0,
+            format: 'video/mp4'
+          });
+        }, 500);
+      }, 500);
     } catch (error) {
-      console.error('Error en el método simple de recorte:', error);
       reject(error);
     }
   });

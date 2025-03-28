@@ -5,7 +5,7 @@ import {
   Step, Stepper, StepLabel
 } from '@mui/material';
 
-function ProcessingProgress({ status, progress, processingDetails }) {
+function ProcessingProgress({ status, progress, processingDetails, warningMessage }) {
   const [elapsedTime, setElapsedTime] = useState(0);
   const [startTime, setStartTime] = useState(null);
   
@@ -93,6 +93,13 @@ function ProcessingProgress({ status, progress, processingDetails }) {
             <Typography variant="body2" gutterBottom>
               Procesando video...
             </Typography>
+            
+            {warningMessage && (
+              <Typography variant="caption" color="warning.main" sx={{ display: 'block', mb: 1 }}>
+                ⚠️ {warningMessage}
+              </Typography>
+            )}
+            
             <LinearProgress 
               variant={typeof progress === 'number' ? "determinate" : "indeterminate"} 
               value={typeof progress === 'number' ? progress : undefined}
@@ -110,6 +117,13 @@ function ProcessingProgress({ status, progress, processingDetails }) {
                 </Typography>
               )}
             </Box>
+            
+            {/* Mensajes informativos basados en el tiempo transcurrido */}
+            {elapsedTime > 60 && (
+              <Typography variant="caption" color="info.main" sx={{ display: 'block', mt: 1 }}>
+                El procesamiento está tardando más de lo normal. El video podría ser muy grande o complejo.
+              </Typography>
+            )}
           </Box>
         );
       

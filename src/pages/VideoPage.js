@@ -36,6 +36,7 @@ function VideoPage() {
   const [processProgress, setProcessProgress] = useState(0);
   const [clipUrl, setClipUrl] = useState(null);
   const [processingError, setProcessingError] = useState(null);
+  const [processWarning, setProcessWarning] = useState(null);
 
   // Estado para notificaciones
   const [notification, setNotification] = useState({ open: false, message: '', severity: 'info' });
@@ -96,7 +97,6 @@ function VideoPage() {
   // Verificación de la duración del clip se realiza directamente en handleProcessClip
 
 
-  // Método mejorado para el procesamiento con FFmpeg y fallback
   const handleProcessClip = async () => {
     try {
       // Limpiar URL anterior si existe
@@ -104,21 +104,22 @@ function VideoPage() {
         URL.revokeObjectURL(clipUrl);
         setClipUrl(null);
       }
-
+  
       setProcessStatus('initializing');
       setProcessProgress(0);
       setProcessingError(null);
-
+      setProcessWarning(null); // Resetear advertencias
+  
       // Verificar si FFmpeg es compatible con este navegador
       const ffmpegAvailable = isFFmpegSupported();
-
+  
       if (!ffmpegAvailable) {
         setNotification({
           open: true,
           message: 'Tu navegador no es compatible con el procesamiento avanzado de video (SharedArrayBuffer). Se usará un método alternativo con limitaciones.',
           severity: 'warning'
         });
-
+  
         // Intentar con el método alternativo simplificado
         try {
           const result = await clipVideoSimple(
@@ -132,30 +133,33 @@ function VideoPage() {
               } else if (progress.type === 'processing') {
                 setProcessStatus('processing');
                 setProcessProgress(progress.progress);
+              } else if (progress.type === 'warning') {
+                // Manejar mensajes de advertencia
+                setProcessWarning(progress.message);
               }
             }
           );
-
+  
           // Verificar si se usó el método simple
           if (result.isSimpleMethod) {
             // Si es el método simple, cambiar a estado completo pero mostrar advertencia
             setClipUrl(result.url);
             setProcessStatus('complete');
-
+  
             setNotification({
               open: true,
               message: 'Advertencia: Se ha utilizado un método simplificado. El enlace abrirá el video en el tiempo seleccionado, pero no es un archivo recortado real.',
               severity: 'warning'
             });
           }
-
+  
           return;
         } catch (simpleError) {
           console.error('Error en método alternativo:', simpleError);
           throw new Error(`No se pudo procesar el video: ${simpleError.message}`);
         }
       }
-
+  
       // Registrar datos de auditoría (esto sería una llamada a una API en una aplicación real)
       const auditData = {
         videoCode: code,
@@ -166,27 +170,27 @@ function VideoPage() {
         timestamp: new Date().toISOString()
       };
       console.log('Datos de auditoría:', auditData);
-
-      // Verificar si el clip es demasiado largo (más de 2 minutos podría causar problemas)
+  
+      // Verificar si el clip es demasiado largo (más de 3 minutos podría causar problemas)
       const clipDuration = clipEnd - clipStart;
-      if (clipDuration > 120) {
+      if (clipDuration > 180) {
         setNotification({
           open: true,
-          message: 'El clip seleccionado es muy largo (>2 min). El procesamiento puede tardar o fallar. Considera usar un fragmento más corto.',
+          message: 'El clip seleccionado es muy largo (>3 min). El procesamiento puede tardar bastante. Para archivos grandes, considera usar un fragmento más corto.',
           severity: 'warning'
         });
       }
-
+  
       // Mensajes detallados para el usuario
       setNotification({
         open: true,
         message: 'Iniciando procesamiento del video. Esto puede tardar unos momentos, por favor espera...',
         severity: 'info'
       });
-
+  
       console.log('Procesando clip desde', clipStart, 'hasta', clipEnd, 'segundos');
       console.log('URL del video fuente:', video.url);
-
+  
       // Procesar el video con FFmpeg
       try {
         const result = await clipVideo(
@@ -202,57 +206,99 @@ function VideoPage() {
               setProcessStatus('processing');
               setProcessProgress(progress.progress);
               console.log('Progreso de procesamiento:', progress.progress);
+            } else if (progress.type === 'warning') {
+              // Manejar mensajes de advertencia
+              setProcessWarning(progress.message);
+              console.log('Advertencia:', progress.message);
+              
+              // Mostrar notificación al usuario
+              setNotification({
+                open: true,
+                message: progress.message,
+                severity: 'warning'
+              });
             }
           }
         );
-
-        console.log('Procesamiento completado. Tamaño del blob:', result.blob.size, 'bytes');
-
-        if (result.blob.size < 1000) {
-          throw new Error('El archivo generado es demasiado pequeño, posiblemente hubo un error en el procesamiento');
+  
+        // Verificar resultado
+        if (result.isSimpleMethod) {
+          // Si se usó el método simple, mostrar advertencia pero permitir continuar
+          setClipUrl(result.url);
+          setProcessStatus('complete');
+          
+          setNotification({
+            open: true,
+            message: 'Se ha usado un método alternativo. El enlace abrirá el video en el tiempo seleccionado, no es un archivo recortado.',
+            severity: 'warning'
+          });
+        } else {
+          // Si es el método normal, verificar tamaño del archivo
+          if (result.blob && result.blob.size < 1000) {
+            throw new Error('El archivo generado es demasiado pequeño, posiblemente hubo un error en el procesamiento');
+          }
+  
+          // Actualizar estado con la URL del clip
+          setClipUrl(result.url);
+          setProcessStatus('complete');
+  
+          // Mostrar notificación de éxito
+          setNotification({
+            open: true,
+            message: 'Clip procesado correctamente. Haz clic en Descargar para guardar.',
+            severity: 'success'
+          });
         }
-
-        // Actualizar estado con la URL del clip
-        setClipUrl(result.url);
-        setProcessStatus('complete');
-
-        // Mostrar notificación de éxito
-        setNotification({
-          open: true,
-          message: 'Clip procesado correctamente. Haz clic en Descargar para guardar.',
-          severity: 'success'
-        });
       } catch (processingError) {
-        console.error('Error específico del procesamiento:', processingError);
-
-        // Mensaje más descriptivo para el usuario
-        let errorMessage = processingError.message || 'Error durante el procesamiento';
-
-        // Mensajes personalizados para errores comunes
-        if (errorMessage.includes('SharedArrayBuffer')) {
-          errorMessage = 'Tu navegador no tiene habilitadas las características necesarias. Intenta con Chrome o Edge actualizado.';
-        } else if (errorMessage.includes('demasiado pequeño')) {
-          errorMessage = 'El archivo generado es inválido. El formato del video original podría ser incompatible.';
-        } else if (errorMessage.includes('network') || errorMessage.includes('CORS')) {
-          errorMessage = 'Error de red al descargar el video. El servidor podría estar bloqueando el acceso.';
-        } else if (errorMessage.includes('memory') || errorMessage.includes('allocation')) {
-          errorMessage = 'Tu dispositivo no tiene suficiente memoria para procesar este video. Intenta con un fragmento más corto.';
+        console.error('Error en procesamiento de video:', processingError);
+        
+        // Intentar método alternativo automáticamente
+        try {
+          setNotification({
+            open: true,
+            message: 'El método principal falló. Intentando método alternativo...',
+            severity: 'warning'
+          });
+          
+          const alternativeResult = await clipVideoSimple(
+            video.url,
+            clipStart,
+            clipEnd,
+            (progress) => {
+              if (progress.type === 'processing') {
+                setProcessStatus('processing');
+                setProcessProgress(progress.progress);
+              }
+            }
+          );
+          
+          // Si llega aquí, el método alternativo funcionó
+          setClipUrl(alternativeResult.url);
+          setProcessStatus('complete');
+          
+          setNotification({
+            open: true,
+            message: 'Se ha usado un método alternativo. El enlace abrirá el video en el tiempo seleccionado.',
+            severity: 'info'
+          });
+          
+        } catch (fallbackError) {
+          // Si también falla el fallback, mostramos error
+          setProcessingError('No se pudo procesar el video con ningún método. Intenta con un clip más corto.');
+          setProcessStatus('error');
+          
+          setNotification({
+            open: true,
+            message: 'Error en todos los métodos de procesamiento. Intenta con un clip más corto.',
+            severity: 'error'
+          });
         }
-
-        setProcessingError(errorMessage);
-        setProcessStatus('error');
-
-        setNotification({
-          open: true,
-          message: `Error al procesar: ${errorMessage}`,
-          severity: 'error'
-        });
       }
     } catch (err) {
       console.error('Error general al procesar el clip:', err);
       setProcessStatus('error');
       setProcessingError(err.message || 'Error desconocido al procesar el video');
-
+  
       setNotification({
         open: true,
         message: `Error: ${err.message}`,
@@ -515,6 +561,7 @@ function VideoPage() {
                       status={processStatus}
                       progress={processProgress}
                       processingDetails={processingError}
+                      warningMessage={processWarning}
                     />
                   </Box>
 
