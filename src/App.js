@@ -6,7 +6,7 @@ import theme from './theme';
 import './App.css';
 import HomePage from './pages/HomePage';
 import VideoPage from './pages/VideoPage';
-import AdminPage from './pages/AdminPage'; // Importar nueva página de administración
+import AdminPage from './pages/AdminPage';
 
 function App() {
   return (
@@ -17,7 +17,7 @@ function App() {
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/video/:code" element={<VideoPage />} />
-            <Route path="/admin" element={<AdminPage />} /> {/* Nueva ruta */}
+            <Route path="/admin" element={<AdminPage />} />
           </Routes>
         </div>
       </BrowserRouter>

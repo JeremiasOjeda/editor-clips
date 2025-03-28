@@ -1,5 +1,7 @@
 import React from 'react';
-import { Container, Typography, Box, Paper } from '@mui/material';
+import { Link } from 'react-router-dom';
+import { Container, Typography, Box, Paper, Button } from '@mui/material';
+import { AdminPanelSettings as AdminIcon } from '@mui/icons-material';
 import CodeInput from '../components/CodeInput';
 
 function HomePage() {
@@ -15,6 +17,20 @@ function HomePage() {
         <Paper elevation={3} style={{ width: '100%', padding: '24px', marginTop: '24px' }}>
           <CodeInput />
         </Paper>
+        
+        {/* Enlace al panel de administración */}
+        <Box mt={4} textAlign="center">
+          <Button
+            component={Link}
+            to="/admin"
+            variant="outlined"
+            size="small"
+            startIcon={<AdminIcon />}
+            sx={{ mt: 2 }}
+          >
+            Panel de Administración
+          </Button>
+        </Box>
       </Box>
     </Container>
   );
