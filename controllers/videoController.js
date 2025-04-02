@@ -55,7 +55,10 @@ const DEFAULT_VIDEOS = [
 // Obtener todos los videos
 exports.getAllVideos = async (req, res) => {
   try {
+    console.log('Solicitud recibida para obtener todos los videos');
     const videos = await Video.find().sort({ createdAt: -1 });
+    
+    console.log(`Se encontraron ${videos.length} videos en la base de datos`);
     
     // Transformar a formato de objeto con código como clave (para compatibilidad con frontend)
     const videosObject = {};
@@ -72,6 +75,7 @@ exports.getAllVideos = async (req, res) => {
     
     res.status(200).json(videosObject);
   } catch (error) {
+    console.error('Error al obtener videos:', error);
     res.status(500).json({ message: 'Error al obtener videos', error: error.message });
   }
 };

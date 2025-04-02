@@ -6,7 +6,8 @@ const path = require('path');
 
 // Importar rutas
 const videoRoutes = require('./routes/videoRoutes');
-const clipRoutes = require('./routes/clipRoutes');
+// Importar controlador de clips directamente si el archivo de rutas no existe
+const clipController = require('./controllers/clipController');
 const auditRoutes = require('./routes/auditRoutes');
 
 // Importar controladores para inicialización
@@ -58,7 +59,18 @@ mongoose.connect(process.env.MONGODB_URI, {
 
 // Definir rutas API
 app.use('/api/videos', videoRoutes);
-app.use('/api/clips', clipRoutes);
+
+// Configurar rutas de clips manualmente ya que el archivo puede estar vacío
+const clipRouter = express.Router();
+clipRouter.get('/', clipController.getAllClips);
+clipRouter.get('/video/:videoCode', clipController.getClipsByVideo);
+clipRouter.post('/', clipController.createClip);
+clipRouter.get('/stats/overview', clipController.getClipStats);
+clipRouter.get('/:id', clipController.getClipById);
+clipRouter.delete('/:id', clipController.deleteClip);
+app.use('/api/clips', clipRouter);
+
+// Usar las rutas de auditoría
 app.use('/api/audit', auditRoutes);
 
 // Ruta simple para verificar la conexión
