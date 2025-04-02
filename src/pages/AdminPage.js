@@ -1,3 +1,5 @@
+// src/pages/AdminPage.js
+
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
@@ -11,7 +13,8 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions
+  DialogActions,
+  Divider  // Añadido para separar visualmente las secciones
 } from '@mui/material';
 import { 
   ArrowBack as ArrowBackIcon,
@@ -19,6 +22,7 @@ import {
 } from '@mui/icons-material';
 import AdminPanel from '../components/AdminPanel';
 import AdminLogin from '../components/AdminLogin';
+import MongoDBConnection from '../components/MongoDBConnection'; // Importar el componente de MongoDB
 
 function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -74,6 +78,15 @@ function AdminPage() {
       <Container maxWidth="lg">
         <Box my={4}>
           <AdminPanel />
+          
+          {/* Separador visual entre el panel de admin y el estado de MongoDB */}
+          <Divider sx={{ my: 4 }} />
+          
+          {/* Componente de conexión a MongoDB */}
+          <Typography variant="h5" component="h2" gutterBottom>
+            Configuración de Base de Datos
+          </Typography>
+          <MongoDBConnection />
         </Box>
       </Container>
       

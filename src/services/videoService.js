@@ -222,6 +222,7 @@ export const estimateVideoDuration = async (url) => {
       
       // Evento cuando los metadatos estén cargados
       video.onloadedmetadata = () => {
+        clearTimeout(timeout);
         const duration = Math.round(video.duration);
         video.remove();
         resolve(duration);
@@ -256,8 +257,7 @@ export const resetToDefaults = () => {
   return VIDEOS_CACHE;
 };
 
-// Exportar todas las funciones para uso en el panel de administración
-export default {
+const videoService = {
   getVideoByCode,
   getValidCodes,
   getAllVideos,
@@ -267,3 +267,5 @@ export default {
   estimateVideoDuration,
   resetToDefaults
 };
+
+export default videoService;
