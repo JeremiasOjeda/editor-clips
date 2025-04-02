@@ -1,5 +1,3 @@
-// src/pages/AdminPage.js
-
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
@@ -14,19 +12,26 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Divider  // Añadido para separar visualmente las secciones
+  Divider,
+  Tab,
+  Tabs
 } from '@mui/material';
 import { 
   ArrowBack as ArrowBackIcon,
-  Logout as LogoutIcon
+  Logout as LogoutIcon,
+  VideoLibrary as VideoIcon,
+  Storage as DatabaseIcon,
+  BarChart as StatsIcon
 } from '@mui/icons-material';
 import AdminPanel from '../components/AdminPanel';
 import AdminLogin from '../components/AdminLogin';
-import MongoDBConnection from '../components/MongoDBConnection'; // Importar el componente de MongoDB
+import DatabaseAdminPanel from '../components/DatabaseAdminPanel';
+import LogViewer from '../components/LogViewer';
 
 function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [logoutDialog, setLogoutDialog] = useState(false);
+  const [tabIndex, setTabIndex] = useState(0);
   
   useEffect(() => {
     // Verificar si ya está autenticado en localStorage
@@ -42,6 +47,10 @@ function AdminPage() {
     localStorage.removeItem('adminAuthenticated');
     setIsAuthenticated(false);
     setLogoutDialog(false);
+  };
+  
+  const handleTabChange = (event, newValue) => {
+    setTabIndex(newValue);
   };
   
   // Si no está autenticado, mostrar pantalla de inicio de sesión
@@ -77,16 +86,30 @@ function AdminPage() {
       
       <Container maxWidth="lg">
         <Box my={4}>
-          <AdminPanel />
+          {/* Pestañas de navegación */}
+          <Tabs 
+            value={tabIndex} 
+            onChange={handleTabChange} 
+            sx={{ mb: 3 }}
+            variant="fullWidth"
+          >
+            <Tab icon={<VideoIcon />} label="Videos" />
+            <Tab icon={<DatabaseIcon />} label="Base de Datos" />
+            <Tab icon={<StatsIcon />} label="Registros" />
+          </Tabs>
           
-          {/* Separador visual entre el panel de admin y el estado de MongoDB */}
-          <Divider sx={{ my: 4 }} />
+          {/* Contenido según la pestaña seleccionada */}
+          {tabIndex === 0 && (
+            <AdminPanel />
+          )}
           
-          {/* Componente de conexión a MongoDB */}
-          <Typography variant="h5" component="h2" gutterBottom>
-            Configuración de Base de Datos
-          </Typography>
-          <MongoDBConnection />
+          {tabIndex === 1 && (
+            <DatabaseAdminPanel />
+          )}
+          
+          {tabIndex === 2 && (
+            <LogViewer />
+          )}
         </Box>
       </Container>
       

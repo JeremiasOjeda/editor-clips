@@ -31,7 +31,10 @@
     "test": "react-scripts test",
     "eject": "react-scripts eject",
     "server": "node server.js",
-    "dev": "concurrently \"npm run server\" \"npm start\""
+    "dev": "concurrently \"npm run server\" \"npm start\"",
+    "server:dev": "nodemon server.js",
+    "dev:full": "concurrently \"npm run server:dev\" \"npm start\"",
+    "install:all": "npm install && cd client && npm install"
   },
   "eslintConfig": {
     "extends": [
@@ -52,6 +55,7 @@
     ]
   },
   "devDependencies": {
-    "http-proxy-middleware": "^3.0.3"
+    "http-proxy-middleware": "^3.0.3",
+    "nodemon": "^3.1.9"
   }
 }

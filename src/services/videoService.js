@@ -1,214 +1,155 @@
 // Servicio para manejar la obtención de videos
-// Usa localStorage para persistir los videos añadidos dinámicamente
+// Usa API para obtener los videos desde MongoDB
 
-// Videos de ejemplo de dominio público (predeterminados)
-const DEFAULT_VIDEOS = {
-  'test': {
-    id: 'test',
-    title: 'Video Test (pequeño)',
-    url: 'https://res.cloudinary.com/duy3ncazx/video/upload/v1741813694/Videos%20del%20Recinto/cgg12e807zcnzyiayois.mp4',
-    duration: 24, // 24 segundos
-    thumbnail: '',
-    isDefault: true
-  },
-  'demo1': {
-    id: 'demo1',
-    title: 'Demo Largo Explicación',
-    url: 'https://upload.wikimedia.org/wikipedia/commons/0/01/-CPBR11_-_Palco_Makers_-_01-02-2018_01-00_-_01-45_-_O_movimento_maker_no_interior_de_SP_%E2%80%93.webm',
-    duration: 2529, // 42:09 en segundos
-    thumbnail: '',
-    isDefault: true
-  },
-  'demo2': {
-    id: 'demo2',
-    title: 'Elephant Dream (Sample)',
-    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
-    duration: 653, // 10:53 en segundos
-    thumbnail: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e8/Elephants_Dream_s5_both.jpg/800px-Elephants_Dream_s5_both.jpg',
-    isDefault: true
-  },
-  'demo3': {
-    id: 'demo3',
-    title: 'Grabacion de partido',
-    url: 'https://res.cloudinary.com/duy3ncazx/video/upload/v1741812770/Videos%20del%20Recinto/w8idxnxya7qmbgbwtfc5.mp4',
-    duration: 28, // 00:28 en segundos
-    thumbnail: '',
-    isDefault: true
-  },
-  'demo4': {
-    id: 'demo4',
-    title: 'Grabacion de partido 2',
-    url: 'https://res.cloudinary.com/duy3ncazx/video/upload/v1741813693/Videos%20del%20Recinto/tiscx94szyl6u4ysuhhn.mp4',
-    duration: 13, // 12:14 en segundos
-    thumbnail: '',
-    isDefault: true
-  },
-  'demo5': {
-    id: 'demo5',
-    title: 'Grabacion de partido de hoy',
-    url: 'https://res.cloudinary.com/duy3ncazx/video/upload/v1743190450/partido28-03_para_subir_exhnvb.mp4',
-    duration: 7200, // 2 horas en segundos
-    thumbnail: '',
-    isDefault: true
-  }
-};
+// URL base para la API
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
-// Clave para el localStorage
-const VIDEOS_STORAGE_KEY = 'editor_clips_videos';
-
-// Función para cargar todos los videos (predeterminados + los agregados por el administrador)
-const loadAllVideos = () => {
-  try {
-    // Intentar obtener videos guardados
-    const savedVideosJSON = localStorage.getItem(VIDEOS_STORAGE_KEY);
-    const savedVideos = savedVideosJSON ? JSON.parse(savedVideosJSON) : {};
-    
-    // Combinar con los videos predeterminados (los guardados tienen prioridad)
-    return { ...DEFAULT_VIDEOS, ...savedVideos };
-  } catch (error) {
-    console.error('Error al cargar videos desde localStorage:', error);
-    return { ...DEFAULT_VIDEOS };
-  }
-};
-
-// Cargar videos al iniciar
-let VIDEOS_CACHE = loadAllVideos();
-
-// Función para guardar la caché actual en localStorage
-const saveVideosToStorage = () => {
-  try {
-    // Filtramos para guardar solo los videos añadidos (no los predeterminados)
-    const customVideos = {};
-    
-    Object.keys(VIDEOS_CACHE).forEach(code => {
-      if (!VIDEOS_CACHE[code].isDefault) {
-        customVideos[code] = VIDEOS_CACHE[code];
-      }
-    });
-    
-    localStorage.setItem(VIDEOS_STORAGE_KEY, JSON.stringify(customVideos));
-    return true;
-  } catch (error) {
-    console.error('Error al guardar videos en localStorage:', error);
-    return false;
-  }
-};
+// Videos en caché para rendimiento
+let VIDEOS_CACHE = {};
 
 // Función para obtener un video por su código
-export const getVideoByCode = (code) => {
-  // En una aplicación real, esto haría una petición a una API
-  return new Promise((resolve, reject) => {
-    setTimeout(() => {
-      const video = VIDEOS_CACHE[code];
-      if (video) {
-        console.log(`Video encontrado para código ${code}:`, video);
-        resolve(video);
-      } else {
-        console.error(`No se encontró ningún video con el código: ${code}`);
-        reject(new Error(`No se encontró ningún video con el código: ${code}`));
-      }
-    }, 500); // Simula un pequeño retraso de red
-  });
-};
+export const getVideoByCode = async (code) => {
+  try {
+    // Buscar en caché primero
+    if (VIDEOS_CACHE[code]) {
+      console.log(`Video encontrado en caché para código ${code}:`, VIDEOS_CACHE[code]);
+      return VIDEOS_CACHE[code];
+    }
 
-// Función para obtener todos los códigos válidos
-export const getValidCodes = () => {
-  return Object.keys(VIDEOS_CACHE);
+    console.log(`Solicitando video con código ${code} a la API...`);
+    const response = await fetch(`${API_BASE_URL}/videos/${code}`);
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || `No se encontró ningún video con el código: ${code}`);
+    }
+    
+    const video = await response.json();
+    
+    // Guardar en caché para futuras solicitudes
+    VIDEOS_CACHE[code] = video;
+    
+    console.log(`Video obtenido de la API para código ${code}:`, video);
+    return video;
+  } catch (error) {
+    console.error(`Error al obtener el video con código ${code}:`, error);
+    throw error;
+  }
 };
 
 // Función para obtener todos los videos (para el panel de administración)
-export const getAllVideos = () => {
-  return { ...VIDEOS_CACHE };
+export const getAllVideos = async () => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/videos`);
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Error al obtener los videos');
+    }
+    
+    const videos = await response.json();
+    
+    // Actualizar caché
+    VIDEOS_CACHE = { ...videos };
+    
+    return videos;
+  } catch (error) {
+    console.error('Error al obtener todos los videos:', error);
+    // Si hay un error de conexión, intentar usar la caché
+    if (Object.keys(VIDEOS_CACHE).length > 0) {
+      console.log('Usando videos en caché debido a un error de conexión');
+      return { ...VIDEOS_CACHE };
+    }
+    throw error;
+  }
 };
 
 // Función para añadir un nuevo video (desde el panel de administración)
-export const addVideo = (code, title, url, duration, thumbnail = '') => {
-  // Validar parámetros
-  if (!code || !title || !url) {
-    throw new Error('Se requieren código, título y URL para añadir un video.');
+export const addVideo = async (code, title, url, duration, thumbnail = '') => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/videos`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        code,
+        title,
+        url,
+        duration: parseInt(duration) || 0,
+        thumbnail
+      })
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Error al añadir el video');
+    }
+    
+    const newVideo = await response.json();
+    
+    // Actualizar caché
+    VIDEOS_CACHE[newVideo.id] = newVideo;
+    
+    return newVideo;
+  } catch (error) {
+    console.error('Error al añadir el video:', error);
+    throw error;
   }
-  
-  // Normalizar el código (eliminar espacios, convertir a minúsculas)
-  const normalizedCode = code.trim().toLowerCase().replace(/\s+/g, '_');
-  
-  // Verificar si ya existe un video con ese código
-  if (VIDEOS_CACHE[normalizedCode]) {
-    throw new Error(`Ya existe un video con el código: ${normalizedCode}`);
-  }
-  
-  // Crear el nuevo video
-  const newVideo = {
-    id: normalizedCode,
-    title: title.trim(),
-    url: url.trim(),
-    duration: parseInt(duration) || 0,
-    thumbnail: thumbnail.trim(),
-    isDefault: false,
-    addedAt: new Date().toISOString()
-  };
-  
-  // Añadir a la caché
-  VIDEOS_CACHE[normalizedCode] = newVideo;
-  
-  // Guardar en localStorage
-  saveVideosToStorage();
-  
-  return newVideo;
 };
 
 // Función para eliminar un video (desde el panel de administración)
-export const removeVideo = (code) => {
-  // Verificar si existe
-  if (!VIDEOS_CACHE[code]) {
-    throw new Error(`No existe un video con el código: ${code}`);
+export const removeVideo = async (code) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/videos/${code}`, {
+      method: 'DELETE'
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || `Error al eliminar el video con código ${code}`);
+    }
+    
+    const result = await response.json();
+    
+    // Eliminar de la caché
+    if (VIDEOS_CACHE[code]) {
+      delete VIDEOS_CACHE[code];
+    }
+    
+    return result.deletedVideo;
+  } catch (error) {
+    console.error('Error al eliminar el video:', error);
+    throw error;
   }
-  
-  // No permitir eliminar videos predeterminados
-  if (VIDEOS_CACHE[code].isDefault) {
-    throw new Error(`No se pueden eliminar videos predeterminados: ${code}`);
-  }
-  
-  // Eliminar de la caché
-  const deletedVideo = VIDEOS_CACHE[code];
-  delete VIDEOS_CACHE[code];
-  
-  // Guardar en localStorage
-  saveVideosToStorage();
-  
-  return deletedVideo;
 };
 
 // Función para actualizar un video existente
-export const updateVideo = (code, updates) => {
-  // Verificar si existe
-  if (!VIDEOS_CACHE[code]) {
-    throw new Error(`No existe un video con el código: ${code}`);
+export const updateVideo = async (code, updates) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/videos/${code}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(updates)
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || `Error al actualizar el video con código ${code}`);
+    }
+    
+    const updatedVideo = await response.json();
+    
+    // Actualizar caché
+    VIDEOS_CACHE[updatedVideo.id] = updatedVideo;
+    
+    return updatedVideo;
+  } catch (error) {
+    console.error('Error al actualizar el video:', error);
+    throw error;
   }
-  
-  // No permitir cambiar el ID en videos predeterminados
-  if (VIDEOS_CACHE[code].isDefault && updates.id && updates.id !== code) {
-    throw new Error(`No se puede cambiar el ID de videos predeterminados: ${code}`);
-  }
-  
-  // Actualizar propiedades
-  const updatedVideo = {
-    ...VIDEOS_CACHE[code],
-    ...updates,
-    updatedAt: new Date().toISOString()
-  };
-  
-  // Si se cambió el ID, eliminar el antiguo y añadir con el nuevo ID
-  if (updates.id && updates.id !== code) {
-    delete VIDEOS_CACHE[code];
-    VIDEOS_CACHE[updates.id] = updatedVideo;
-  } else {
-    VIDEOS_CACHE[code] = updatedVideo;
-  }
-  
-  // Guardar en localStorage
-  saveVideosToStorage();
-  
-  return updatedVideo;
 };
 
 // Función para estimar la duración de un video a partir de su URL
@@ -251,15 +192,28 @@ export const estimateVideoDuration = async (url) => {
 };
 
 // Función para reiniciar a los valores predeterminados (para el panel de admin)
-export const resetToDefaults = () => {
-  VIDEOS_CACHE = { ...DEFAULT_VIDEOS };
-  localStorage.removeItem(VIDEOS_STORAGE_KEY);
-  return VIDEOS_CACHE;
+export const resetToDefaults = async () => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/videos/reset/defaults`, {
+      method: 'POST'
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Error al restablecer los videos');
+    }
+    
+    // Limpiar caché y volver a cargar videos
+    VIDEOS_CACHE = {};
+    return await getAllVideos();
+  } catch (error) {
+    console.error('Error al restablecer los videos:', error);
+    throw error;
+  }
 };
 
 const videoService = {
   getVideoByCode,
-  getValidCodes,
   getAllVideos,
   addVideo,
   removeVideo,

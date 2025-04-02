@@ -1,17 +1,16 @@
-
 /**
  * Servicio para registrar acciones del usuario y datos importantes
- * en archivos de texto para auditoría
+ * Ahora usa una API para almacenar los logs en MongoDB
  */
 
-// Función que crea un registro en formato texto
-const createLogEntry = (logData) => {
+// URL base para la API
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+
+// Función que crea un registro a través de la API
+const createLogEntry = async (logData) => {
+  try {
     // Fecha y hora actual
     const timestamp = new Date().toISOString();
-    
-    // Obtener la IP del cliente (en entorno real se obtendría del request)
-    // En navegador usamos una función placeholder que debe ser reemplazada en el servidor
-    const userIP = getUserIP();
     
     // Información del navegador/dispositivo
     const userAgent = navigator.userAgent;
@@ -19,274 +18,361 @@ const createLogEntry = (logData) => {
     // Formatear los datos como una entrada de registro
     const logEntry = {
       timestamp,
-      userIP,
       userAgent,
       ...logData
     };
     
-    // En frontend solo podemos simular la escritura del log
-    // Esta función debe ser reemplazada por una llamada a API en producción
-    return saveLogToFile(logEntry);
-  };
-  
-  /**
-   * Función placeholder para obtener la IP del usuario
-   * En un entorno real, la IP estaría disponible en el servidor
-   * y no se podría obtener de manera confiable en el cliente
-   */
-  const getUserIP = () => {
-    // Placeholder - en una aplicación real la IP sería capturada por el servidor
-    return "CLIENT_IP_UNKNOWN";
-  };
-  
-  /**
-   * Guarda los logs en el almacenamiento local del navegador
-   * Solución temporal hasta implementar un backend
-   */
-  const saveLogToLocalStorage = (logEntry) => {
-    try {
-      // Obtener logs existentes
-      const existingLogs = JSON.parse(localStorage.getItem('video_editor_logs') || '[]');
+    // Enviar a la API
+    const response = await fetch(`${API_BASE_URL}/audit`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(logEntry)
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Error al guardar log en la API:', errorData);
       
-      // Añadir nuevo log con timestamp si no tiene uno
-      if (!logEntry.timestamp) {
-        logEntry.timestamp = new Date().toISOString();
-      }
+      // Si hay un error, guardar en localStorage como fallback
+      saveLogToLocalStorage(logEntry);
       
-      // Añadir nuevo log
-      existingLogs.push(logEntry);
-      
-      // Si hay demasiados logs, eliminar los más antiguos
-      // Esto es para evitar superar el límite de localStorage (generalmente 5-10MB)
-      if (existingLogs.length > 1000) {
-        // Mantener solo los 1000 registros más recientes
-        existingLogs.splice(0, existingLogs.length - 1000);
-      }
-      
-      // Guardar logs actualizados
-      localStorage.setItem('video_editor_logs', JSON.stringify(existingLogs));
-      
-      // También guardar en consola para depuración
-      console.log('LOG ENTRY:', logEntry);
-      
-      // Devolver los datos para uso potencial
-      return {
-        success: true,
-        logEntry,
-        totalLogs: existingLogs.length
-      };
-    } catch (error) {
-      console.error('Error al guardar log en localStorage:', error);
       return {
         success: false,
-        error: error.message
+        error: errorData.message,
+        savedLocally: true
       };
     }
-  };
-  
-  /**
-   * Función para guardar el log
-   * En producción, esta función sería reemplazada por una llamada a API
-   * que guardaría los datos en un archivo o base de datos en el servidor
-   */
-  const saveLogToFile = (logEntry) => {
-    // Convertir a formato texto amigable
-    const logText = formatLogEntryForTxt(logEntry);
     
-    // En desarrollo, guardamos en localStorage y mostramos en consola
-    console.log('LOG ENTRY (saved to localStorage):', logText);
+    const result = await response.json();
     
-    // Guardar en localStorage
-    saveLogToLocalStorage(logEntry);
+    // También guardar en consola para depuración
+    console.log('LOG ENTRY (saved to API):', logEntry);
     
-    // Devolver los datos del log para uso potencial
+    return {
+      success: true,
+      logEntry: result
+    };
+  } catch (error) {
+    console.error('Error al enviar log a la API:', error);
+    
+    // Si hay un error de red, guardar en localStorage como fallback
+    saveLogToLocalStorage(logData);
+    
+    return {
+      success: false,
+      error: error.message,
+      savedLocally: true
+    };
+  }
+};
+
+/**
+ * Guarda los logs en el almacenamiento local del navegador como fallback
+ * cuando la API no está disponible
+ */
+const saveLogToLocalStorage = (logEntry) => {
+  try {
+    // Obtener logs existentes
+    const existingLogs = JSON.parse(localStorage.getItem('video_editor_logs') || '[]');
+    
+    // Añadir nuevo log con timestamp si no tiene uno
+    if (!logEntry.timestamp) {
+      logEntry.timestamp = new Date().toISOString();
+    }
+    
+    // Añadir nuevo log
+    existingLogs.push(logEntry);
+    
+    // Si hay demasiados logs, eliminar los más antiguos
+    // Esto es para evitar superar el límite de localStorage (generalmente 5-10MB)
+    if (existingLogs.length > 1000) {
+      // Mantener solo los 1000 registros más recientes
+      existingLogs.splice(0, existingLogs.length - 1000);
+    }
+    
+    // Guardar logs actualizados
+    localStorage.setItem('video_editor_logs', JSON.stringify(existingLogs));
+    
+    // También guardar en consola para depuración
+    console.log('LOG ENTRY (saved to localStorage as fallback):', logEntry);
+    
+    // Devolver los datos para uso potencial
     return {
       success: true,
       logEntry,
-      formattedText: logText
+      totalLogs: existingLogs.length
     };
-  };
-  
-  /**
-   * Formatea una entrada de log para archivo de texto
-   */
-  const formatLogEntryForTxt = (logEntry) => {
-    // Crear una cadena de texto con formato para archivo .txt
-    let logLines = [
-      `===== LOG ENTRY: ${logEntry.timestamp} =====`,
-      `IP: ${logEntry.userIP}`,
-      `USER-AGENT: ${logEntry.userAgent}`,
-    ];
+  } catch (error) {
+    console.error('Error al guardar log en localStorage:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+};
+
+// Función para sincronizar logs locales con la API
+export const syncLocalLogs = async () => {
+  try {
+    const localLogs = JSON.parse(localStorage.getItem('video_editor_logs') || '[]');
     
-    // Agregar información del video si existe
-    if (logEntry.videoCode) {
-      logLines.push(`VIDEO CODE: ${logEntry.videoCode}`);
+    if (localLogs.length === 0) {
+      return { success: true, message: 'No hay logs locales para sincronizar', syncedCount: 0 };
     }
     
-    if (logEntry.videoTitle) {
-      logLines.push(`VIDEO TITLE: ${logEntry.videoTitle}`);
-    }
+    console.log(`Intentando sincronizar ${localLogs.length} logs locales con la API...`);
     
-    if (logEntry.videoUrl) {
-      logLines.push(`VIDEO URL: ${logEntry.videoUrl}`);
-    }
+    let syncedCount = 0;
+    let failedCount = 0;
     
-    // Agregar información del clip si existe
-    if (logEntry.clipStart !== undefined && logEntry.clipEnd !== undefined) {
-      logLines.push(`CLIP START: ${logEntry.clipStart}s`);
-      logLines.push(`CLIP END: ${logEntry.clipEnd}s`);
-      logLines.push(`CLIP DURATION: ${(logEntry.clipEnd - logEntry.clipStart).toFixed(2)}s`);
-    }
-    
-    // Agregar información adicional
-    if (logEntry.action) {
-      logLines.push(`ACTION: ${logEntry.action}`);
-    }
-    
-    if (logEntry.status) {
-      logLines.push(`STATUS: ${logEntry.status}`);
-    }
-    
-    if (logEntry.processingMethod) {
-      logLines.push(`PROCESSING METHOD: ${logEntry.processingMethod}`);
-    }
-    
-    if (logEntry.error) {
-      logLines.push(`ERROR: ${logEntry.error}`);
-    }
-    
-    // Agregar datos adicionales si existen
-    if (logEntry.additionalData) {
-      logLines.push('ADDITIONAL DATA:');
-      for (const [key, value] of Object.entries(logEntry.additionalData)) {
-        logLines.push(`  ${key}: ${value}`);
+    // Enviar cada log a la API
+    for (const log of localLogs) {
+      try {
+        const response = await fetch(`${API_BASE_URL}/audit`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(log)
+        });
+        
+        if (response.ok) {
+          syncedCount++;
+        } else {
+          failedCount++;
+        }
+      } catch (error) {
+        failedCount++;
       }
     }
     
-    // Agregar línea final
-    logLines.push('='.repeat(40));
+    // Si todos se sincronizaron, limpiar localStorage
+    if (failedCount === 0) {
+      localStorage.removeItem('video_editor_logs');
+      console.log(`Todos los ${syncedCount} logs fueron sincronizados correctamente y eliminados del almacenamiento local.`);
+    } else {
+      // Si algunos fallaron, mantener solo los que fallaron
+      const remainingLogs = localLogs.slice(syncedCount);
+      localStorage.setItem('video_editor_logs', JSON.stringify(remainingLogs));
+      console.log(`Se sincronizaron ${syncedCount} logs, pero fallaron ${failedCount}. Se mantienen ${remainingLogs.length} logs en almacenamiento local.`);
+    }
     
-    // Unir todas las líneas con saltos de línea
-    return logLines.join('\n');
+    return {
+      success: true,
+      syncedCount,
+      failedCount,
+      remainingCount: failedCount
+    };
+  } catch (error) {
+    console.error('Error al sincronizar logs locales:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+};
+
+// Función específica para registrar acceso a un video
+export const logVideoAccess = async (videoData) => {
+  return await createLogEntry({
+    action: 'VIDEO_ACCESS',
+    videoCode: videoData.code || videoData.id,
+    videoTitle: videoData.title,
+    videoUrl: videoData.url,
+    additionalData: {
+      videoDuration: videoData.duration,
+      timestamp: new Date().toISOString()
+    }
+  });
+};
+
+// Función para registrar la creación/descarga de un clip
+export const logClipCreation = async (videoData, clipStart, clipEnd, processingMethod, status = 'SUCCESS', error = null, additionalData = {}) => {
+  const logData = {
+    action: 'CLIP_CREATION',
+    videoCode: videoData.code || videoData.id,
+    videoTitle: videoData.title,
+    videoUrl: videoData.url,
+    clipStart,
+    clipEnd,
+    clipDuration: clipEnd - clipStart,
+    processingMethod,
+    status,
+    error,
+    additionalData: {
+      browserInfo: {
+        ffmpegSupported: typeof SharedArrayBuffer !== 'undefined',
+        mediaRecorderSupported: typeof MediaRecorder !== 'undefined',
+        userAgent: navigator.userAgent
+      },
+      timestamp: new Date().toISOString(),
+      ...additionalData
+    }
   };
   
-  // Función específica para registrar acceso a un video
-  export const logVideoAccess = (videoData) => {
-    return createLogEntry({
-      action: 'VIDEO_ACCESS',
-      videoCode: videoData.code || videoData.id,
-      videoTitle: videoData.title,
-      videoUrl: videoData.url,
-      additionalData: {
-        videoDuration: videoData.duration,
-        timestamp: new Date().toISOString()
-      }
-    });
-  };
+  // Crear entrada de log
+  await createLogEntry(logData);
   
-  // Función para registrar la creación/descarga de un clip
-  export const logClipCreation = (videoData, clipStart, clipEnd, processingMethod, status = 'SUCCESS', error = null, additionalData = {}) => {
-    return createLogEntry({
-      action: 'CLIP_CREATION',
-      videoCode: videoData.code || videoData.id,
-      videoTitle: videoData.title,
-      videoUrl: videoData.url,
-      clipStart,
-      clipEnd,
-      processingMethod,
-      status,
-      error,
-      additionalData: {
-        browserInfo: {
-          ffmpegSupported: typeof SharedArrayBuffer !== 'undefined',
-          mediaRecorderSupported: typeof MediaRecorder !== 'undefined',
-          userAgent: navigator.userAgent
+  // Si el clip se creó exitosamente, crear también un registro en la colección de clips
+  if (status === 'SUCCESS' && !error) {
+    try {
+      const clipData = {
+        videoCode: videoData.code || videoData.id,
+        videoTitle: videoData.title,
+        clipStart,
+        clipEnd,
+        processingMethod,
+        fileSize: additionalData.fileSize || 0,
+        format: additionalData.format || 'video/mp4',
+        clientInfo: {
+          userAgent: navigator.userAgent,
+          platform: navigator.platform
+        }
+      };
+      
+      // Enviar a la API de clips
+      await fetch(`${API_BASE_URL}/clips`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
         },
-        timestamp: new Date().toISOString(),
-        ...additionalData
-      }
-    });
-  };
+        body: JSON.stringify(clipData)
+      });
+    } catch (error) {
+      console.error('Error al registrar clip en base de datos:', error);
+    }
+  }
   
-  // Función para registrar errores
-  export const logError = (videoData, action, errorMessage, additionalData = {}) => {
-    return createLogEntry({
-      action,
-      status: 'ERROR',
-      error: errorMessage,
-      videoCode: videoData?.code || videoData?.id,
-      videoTitle: videoData?.title,
-      videoUrl: videoData?.url,
-      additionalData
+  return logData;
+};
+
+// Función para registrar errores
+export const logError = async (videoData, action, errorMessage, additionalData = {}) => {
+  return await createLogEntry({
+    action,
+    status: 'ERROR',
+    error: errorMessage,
+    videoCode: videoData?.code || videoData?.id,
+    videoTitle: videoData?.title,
+    videoUrl: videoData?.url,
+    additionalData
+  });
+};
+
+// Función para obtener todos los logs desde la API
+export const getAllLogs = async (page = 1, limit = 100, filter = {}) => {
+  try {
+    // Construir query params
+    const queryParams = new URLSearchParams({
+      page,
+      limit,
+      ...filter
     });
-  };
-  
-  // Función para exportar todos los logs a un archivo de texto
-  export const exportLogsToFile = () => {
+    
+    const response = await fetch(`${API_BASE_URL}/audit?${queryParams.toString()}`);
+    
+    if (!response.ok) {
+      throw new Error('Error al obtener logs de auditoría');
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error al obtener logs:', error);
+    
+    // Si falla la API, intentar obtener del localStorage como fallback
+    try {
+      const logs = JSON.parse(localStorage.getItem('video_editor_logs') || '[]');
+      return { 
+        success: true, 
+        logs,
+        pagination: {
+          totalLogs: logs.length,
+          currentPage: 1,
+          totalPages: 1
+        },
+        source: 'localStorage'
+      };
+    } catch (localError) {
+      return { success: false, error: error.message, logs: [] };
+    }
+  }
+};
+
+// Función para exportar logs desde la API
+export const exportLogs = async (format = 'json', days = 30, videoCode = null) => {
+  try {
+    // Construir query params
+    const queryParams = new URLSearchParams({
+      days,
+      format
+    });
+    
+    if (videoCode) {
+      queryParams.append('videoCode', videoCode);
+    }
+    
+    const response = await fetch(`${API_BASE_URL}/audit/export?${queryParams.toString()}`);
+    
+    if (!response.ok) {
+      throw new Error('Error al exportar logs');
+    }
+    
+    const data = await response.json();
+    
+    // Crear archivo para descargar
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `audit_logs_${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    return { success: true, count: data.length };
+  } catch (error) {
+    console.error('Error al exportar logs:', error);
+    
+    // Si falla, intentar exportar desde localStorage
     try {
       const logs = JSON.parse(localStorage.getItem('video_editor_logs') || '[]');
       
-      if (logs.length === 0) {
-        return { success: false, message: 'No hay logs para exportar' };
-      }
-      
-      // Convertir logs a formato texto
-      const logTexts = logs.map(log => formatLogEntryForTxt(log));
-      const allLogsText = logTexts.join('\n\n');
+      // Filtrar por videoCode si se proporciona
+      const filteredLogs = videoCode 
+        ? logs.filter(log => log.videoCode === videoCode) 
+        : logs;
       
       // Crear blob y URL para descargar
-      const blob = new Blob([allLogsText], { type: 'text/plain' });
+      const blob = new Blob([JSON.stringify(filteredLogs, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       
-      // Crear elemento anchor para descargar
       const a = document.createElement('a');
       a.href = url;
-      a.download = `video_editor_logs_${new Date().toISOString().replace(/:/g, '-')}.txt`;
+      a.download = `video_editor_logs_${new Date().toISOString().slice(0,10)}.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      
-      // Limpiar
       URL.revokeObjectURL(url);
       
-      return { success: true, count: logs.length };
-    } catch (error) {
-      console.error('Error al exportar logs:', error);
+      return { success: true, count: filteredLogs.length, source: 'localStorage' };
+    } catch (localError) {
       return { success: false, error: error.message };
     }
-  };
-  
-  // Función para borrar todos los logs almacenados
-  export const clearAllLogs = () => {
-    try {
-      localStorage.removeItem('video_editor_logs');
-      return { success: true };
-    } catch (error) {
-      console.error('Error al borrar logs:', error);
-      return { success: false, error: error.message };
-    }
-  };
-  
-  // Función para obtener todos los logs almacenados
-  export const getAllLogs = () => {
-    try {
-      const logs = JSON.parse(localStorage.getItem('video_editor_logs') || '[]');
-      return { success: true, logs };
-    } catch (error) {
-      console.error('Error al obtener logs:', error);
-      return { success: false, error: error.message, logs: [] };
-    }
-  };
-  
-  const loggerService = {
-    logVideoAccess,
-    logClipCreation,
-    logError,
-    createLogEntry,
-    exportLogsToFile,
-    clearAllLogs,
-    getAllLogs
-  };
-  
-  export default loggerService;
-  
+  }
+};
+
+const loggerService = {
+  logVideoAccess,
+  logClipCreation,
+  logError,
+  createLogEntry,
+  syncLocalLogs,
+  getAllLogs,
+  exportLogs
+};
+
+export default loggerService;
