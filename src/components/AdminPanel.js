@@ -52,11 +52,10 @@ function AdminPanel() {
     });
   }, []);
   
-  // Función para cargar todos los videos
-  const loadVideos = useCallback(() => {
+  const loadVideos = useCallback(async () => {
     setLoading(true);
     try {
-      const allVideos = getAllVideos();
+      const allVideos = await getAllVideos(); // Añadir await aquí
       setVideos(allVideos);
     } catch (error) {
       console.error('Error al cargar videos:', error);

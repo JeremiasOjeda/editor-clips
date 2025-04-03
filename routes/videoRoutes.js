@@ -1,5 +1,3 @@
-module.exports = router;
-
 const express = require('express');
 const router = express.Router();
 const videoController = require('../controllers/videoController');
@@ -23,4 +21,4 @@ router.put('/:code', videoController.updateVideo);
 // Ruta para eliminar un video
 router.delete('/:code', videoController.deleteVideo);
 
-module.exports = router;
+module.exports = router;  // Mover esto al final del archivo

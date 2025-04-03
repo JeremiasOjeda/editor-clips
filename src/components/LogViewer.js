@@ -52,7 +52,9 @@ function LogViewer() {
     setLoading(true);
     try {
       // Verificar si la API está disponible
+      console.log("Verificando disponibilidad de la API...");
       const isAvailable = await isApiAvailable();
+      console.log("Resultado de isApiAvailable:", isAvailable);
       setApiAvailable(isAvailable);
       
       // Cargar los logs locales de todos modos
@@ -60,9 +62,11 @@ function LogViewer() {
       
       // Si la API está disponible, cargar desde allí
       if (isAvailable) {
+        console.log("API disponible, cargando desde API");
         setDataSource('api');
         await loadLogsFromApi();
       } else {
+        console.log("API no disponible, usando datos locales");
         setDataSource('local');
       }
     } catch (error) {
@@ -82,21 +86,32 @@ function LogViewer() {
       if (filterAction) filter.action = filterAction;
       if (filterVideoCode) filter.videoCode = filterVideoCode;
       
+      console.log("Intentando cargar logs desde API con filtros:", filter);
+      
       const response = await loggerService.getAllLogs(
         pagination.page, 
         pagination.limit,
         filter
       );
       
-      if (response.success) {
+      console.log("Respuesta de getAllLogs:", response);
+      
+      // Modificar esta condición para verificar si hay logs en lugar de verificar success
+      if (response && response.logs && Array.isArray(response.logs)) {
+        console.log("Logs cargados exitosamente, cantidad:", response.logs.length);
         setLogs(response.logs);
-        setPagination({
-          ...pagination,
-          totalPages: response.pagination.totalPages,
-          totalLogs: response.pagination.totalLogs
-        });
+        
+        // Actualizar paginación si existe
+        if (response.pagination) {
+          setPagination({
+            ...pagination,
+            totalPages: response.pagination.totalPages || 1,
+            totalLogs: response.pagination.totalLogs || response.logs.length
+          });
+        }
       } else {
-        // Si hay error en la API, cambiar a logs locales
+        console.error("Respuesta sin logs válidos:", response);
+        // Si no hay logs válidos, cambiar a logs locales
         setDataSource('local');
         setApiAvailable(false);
       }

@@ -271,13 +271,18 @@ export const getAllLogs = async (page = 1, limit = 100, filter = {}) => {
       ...filter
     });
     
+    console.log(`Solicitando logs a: ${API_BASE_URL}/audit?${queryParams.toString()}`);
+    
     const response = await fetch(`${API_BASE_URL}/audit?${queryParams.toString()}`);
     
     if (!response.ok) {
       throw new Error('Error al obtener logs de auditoría');
     }
     
-    return await response.json();
+    const data = await response.json();
+    console.log("Datos recibidos de la API:", data);
+    
+    return data;
   } catch (error) {
     console.error('Error al obtener logs:', error);
     
