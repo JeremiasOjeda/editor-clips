@@ -9,6 +9,21 @@ function ClipSelector({ totalDuration = 60, onSelectionChange }) {
   const [manualStartTime, setManualStartTime] = useState('00:00');
   const [manualEndTime, setManualEndTime] = useState('00:30');
 
+  // Función para generar marcas en cada hora para el slider
+  const generateHourMarks = (duration) => {
+    const marks = [];
+    const hours = Math.floor(duration / 3600);
+    
+    for (let i = 0; i <= hours; i++) {
+      marks.push({
+        value: i * 3600,
+        label: `${i}h`
+      });
+    }
+    
+    return marks;
+  };
+
   // Actualizar el rango cuando cambie la duración total
   useEffect(() => {
     const endTime = Math.min(30, totalDuration);
@@ -30,24 +45,50 @@ function ClipSelector({ totalDuration = 60, onSelectionChange }) {
     }
   };
 
-  // Formatear segundos a MM:SS para mostrar en la interfaz
+  // Formatear segundos a MM:SS o HH:MM:SS para mostrar en la interfaz
   const formatTime = (seconds) => {
-    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
     const remainingSeconds = Math.floor(seconds % 60);
-    return `${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
+    
+    if (hours > 0) {
+      return `${hours}:${minutes < 10 ? '0' : ''}${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
+    } else {
+      return `${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
+    }
   };
 
-  // Formatear segundos a MM:SS para los campos de entrada
+  // Formatear segundos a MM:SS o HH:MM:SS para los campos de entrada
   const formatTimeInput = (seconds) => {
-    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
     const remainingSeconds = Math.floor(seconds % 60);
-    return `${minutes < 10 ? '0' : ''}${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
+    
+    if (totalDuration >= 3600 || hours > 0) {
+      return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+    } else {
+      return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+    }
   };
 
-  // Convertir formato MM:SS a segundos
+  // Convertir formato MM:SS o HH:MM:SS a segundos
   const parseTimeInput = (timeString) => {
-    const [minutes, seconds] = timeString.split(':').map(part => parseInt(part, 10));
-    return (isNaN(minutes) ? 0 : minutes) * 60 + (isNaN(seconds) ? 0 : seconds);
+    const parts = timeString.split(':').map(part => parseInt(part, 10));
+    
+    if (parts.length === 3) {
+      // Formato HH:MM:SS
+      const [hours, minutes, seconds] = parts;
+      return (isNaN(hours) ? 0 : hours) * 3600 + 
+             (isNaN(minutes) ? 0 : minutes) * 60 + 
+             (isNaN(seconds) ? 0 : seconds);
+    } else if (parts.length === 2) {
+      // Formato MM:SS
+      const [minutes, seconds] = parts;
+      return (isNaN(minutes) ? 0 : minutes) * 60 + 
+             (isNaN(seconds) ? 0 : seconds);
+    }
+    
+    return 0;
   };
 
   // Manejar cambios en el campo de tiempo de inicio
@@ -55,8 +96,12 @@ function ClipSelector({ totalDuration = 60, onSelectionChange }) {
     const timeString = e.target.value;
     setManualStartTime(timeString);
     
+    // Validar formato de tiempo según la duración del video
+    const timeRegex = totalDuration >= 3600 ? 
+      /^\d{1,2}:\d{1,2}:\d{1,2}$/ : /^\d{1,2}:\d{1,2}$/;
+    
     // Solo actualizar el rango si el formato es válido
-    if (/^\d{1,2}:\d{2}$/.test(timeString)) {
+    if (timeRegex.test(timeString)) {
       const newStartTime = parseTimeInput(timeString);
       if (newStartTime < range[1] && newStartTime >= 0 && newStartTime <= totalDuration) {
         setRange([newStartTime, range[1]]);
@@ -72,8 +117,12 @@ function ClipSelector({ totalDuration = 60, onSelectionChange }) {
     const timeString = e.target.value;
     setManualEndTime(timeString);
     
+    // Validar formato de tiempo según la duración del video
+    const timeRegex = totalDuration >= 3600 ? 
+      /^\d{1,2}:\d{1,2}:\d{1,2}$/ : /^\d{1,2}:\d{1,2}$/;
+    
     // Solo actualizar el rango si el formato es válido
-    if (/^\d{1,2}:\d{2}$/.test(timeString)) {
+    if (timeRegex.test(timeString)) {
       const newEndTime = parseTimeInput(timeString);
       if (newEndTime > range[0] && newEndTime <= totalDuration) {
         setRange([range[0], newEndTime]);
@@ -84,7 +133,7 @@ function ClipSelector({ totalDuration = 60, onSelectionChange }) {
     }
   };
 
-  // Establecer duración máxima de clip (30 segundos por defecto)
+  // Establecer duración máxima de clip (30 segundos)
   const handleSet30s = () => {
     const startTime = range[0];
     const endTime = Math.min(startTime + 30, totalDuration);
@@ -95,10 +144,21 @@ function ClipSelector({ totalDuration = 60, onSelectionChange }) {
     }
   };
 
-  // Establecer duración máxima de clip (1 minuto por defecto)
+  // Establecer duración máxima de clip (1 minuto)
   const handleSet1m = () => {
     const startTime = range[0];
     const endTime = Math.min(startTime + 60, totalDuration);
+    setRange([startTime, endTime]);
+    setManualEndTime(formatTimeInput(endTime));
+    if (onSelectionChange) {
+      onSelectionChange(startTime, endTime);
+    }
+  };
+
+  // Establecer duración de 5 minutos para videos largos
+  const handleSet5m = () => {
+    const startTime = range[0];
+    const endTime = Math.min(startTime + 300, totalDuration);
     setRange([startTime, endTime]);
     setManualEndTime(formatTimeInput(endTime));
     if (onSelectionChange) {
@@ -116,6 +176,12 @@ function ClipSelector({ totalDuration = 60, onSelectionChange }) {
           Duración total del video: {formatTimeInput(totalDuration)}
         </Typography>
         
+        {totalDuration >= 3600 && (
+          <Typography variant="caption" color="primary" sx={{ display: 'block', mb: 2 }}>
+            Este es un video largo (más de una hora). Para mejor rendimiento, selecciona fragmentos cortos.
+          </Typography>
+        )}
+        
         <Box px={2} mt={4}>
           <Slider
             value={range}
@@ -125,6 +191,7 @@ function ClipSelector({ totalDuration = 60, onSelectionChange }) {
             min={0}
             max={totalDuration}
             valueLabelFormat={formatTime}
+            marks={totalDuration >= 3600 ? generateHourMarks(totalDuration) : undefined}
             sx={{ mb: 4 }}
           />
           
@@ -137,12 +204,13 @@ function ClipSelector({ totalDuration = 60, onSelectionChange }) {
                 fullWidth
                 value={manualStartTime}
                 onChange={handleStartTimeChange}
-                placeholder="00:00"
+                placeholder={totalDuration >= 3600 ? "00:00:00" : "00:00"}
                 size="small"
                 inputProps={{ 
-                  pattern: "[0-9]{1,2}:[0-9]{2}",
-                  title: "Formato: MM:SS" 
+                  pattern: totalDuration >= 3600 ? "[0-9]{1,2}:[0-9]{2}:[0-9]{2}" : "[0-9]{1,2}:[0-9]{2}",
+                  title: totalDuration >= 3600 ? "Formato: HH:MM:SS" : "Formato: MM:SS" 
                 }}
+                helperText={totalDuration >= 3600 ? "Formato: HH:MM:SS" : "Formato: MM:SS"}
               />
             </Grid>
             <Grid item xs={12} sm={6}>
@@ -153,12 +221,13 @@ function ClipSelector({ totalDuration = 60, onSelectionChange }) {
                 fullWidth
                 value={manualEndTime}
                 onChange={handleEndTimeChange}
-                placeholder="00:00"
+                placeholder={totalDuration >= 3600 ? "00:00:00" : "00:00"}
                 size="small"
                 inputProps={{ 
-                  pattern: "[0-9]{1,2}:[0-9]{2}",
-                  title: "Formato: MM:SS" 
+                  pattern: totalDuration >= 3600 ? "[0-9]{1,2}:[0-9]{2}:[0-9]{2}" : "[0-9]{1,2}:[0-9]{2}",
+                  title: totalDuration >= 3600 ? "Formato: HH:MM:SS" : "Formato: MM:SS"
                 }}
+                helperText={totalDuration >= 3600 ? "Formato: HH:MM:SS" : "Formato: MM:SS"}
               />
             </Grid>
           </Grid>
@@ -167,22 +236,37 @@ function ClipSelector({ totalDuration = 60, onSelectionChange }) {
             <Typography variant="body2" color="textSecondary" gutterBottom>
               Duración seleccionada: {formatTime(range[1] - range[0])} 
             </Typography>
-            <Stack direction="row" spacing={1} mt={1}>
+            <Stack direction="row" spacing={1} mt={1} flexWrap="wrap">
               <Button 
                 variant="outlined" 
                 size="small"
                 onClick={handleSet30s}
               >
-                Establecer 30s
+                30s
               </Button>
               <Button 
                 variant="outlined" 
                 size="small"
                 onClick={handleSet1m}
               >
-                Establecer 1m
+                1m
               </Button>
+              {totalDuration >= 300 && (
+                <Button 
+                  variant="outlined" 
+                  size="small"
+                  onClick={handleSet5m}
+                >
+                  5m
+                </Button>
+              )}
             </Stack>
+            
+            {(range[1] - range[0]) > 300 && (
+              <Typography variant="caption" color="warning.main" sx={{ display: 'block', mt: 2 }}>
+                ⚠️ Clip largo seleccionado ({formatTime(range[1] - range[0])}). El procesamiento puede tardar más tiempo.
+              </Typography>
+            )}
           </Box>
         </Box>
       </Box>
