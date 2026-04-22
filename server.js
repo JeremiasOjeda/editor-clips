@@ -44,10 +44,7 @@ app.use((req, res, next) => {
 });
 
 // Conexión a MongoDB
-mongoose.connect(process.env.MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-})
+mongoose.connect(process.env.MONGODB_URI)
 .then(() => {
   console.log('Conexión exitosa a MongoDB');
   // Inicializar videos predeterminados si es necesario
